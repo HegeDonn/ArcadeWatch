@@ -29,6 +29,9 @@ class PacView extends WatchUi.View {
     }
 
     function onLayout(dc as Dc) as Void {
+        // Loaded here rather than in AppBase.onStart, which also runs for the
+        // glance -- and a glance may not touch Application.Storage.
+        Theme.loadChoice();
         Layout.compute(dc.getWidth(), dc.getHeight());
         makeBuffer(dc.getWidth(), dc.getHeight());
         if (!_started) {

@@ -52,6 +52,22 @@ python3 tools/gen_icon.py       # launcher icon
 Run them from the project root, not from inside `tools/` — they write to
 paths relative to the root.
 
+## Launching it quickly
+
+Hunting through the app list gets old, so there are two faster routes:
+
+- **The glance.** Swipe up or down from the watch face and the app appears as
+  a card in the carousel; tap it to launch. That is what `source/Glance.mc`
+  provides.
+- **A hot key.** On the watch: **Settings ▸ System ▸ Hot Keys**, pick a
+  button and a press-and-hold action, and assign Arcade Watch. One long press
+  from anywhere and it opens — no swiping at all.
+
+The glance is deliberately self-contained: no `Theme`, no game state, no font
+resources, not even a string resource. It gets its own compile scope with a
+**64 KB** budget against the watch-app's 768 KB, and that scope is far more
+restricted than it looks — see the battle scars.
+
 ## What's on screen
 
 ```
@@ -249,6 +265,7 @@ source/    MazeData.mc   generated: 28-bit-per-row masks + merged wall runs
            Maze.mc       runtime dot state, tile queries
            Nav.mc        the flood fill (hot path; stamps, masks, unrolled)
            Actor.mc      tile-to-tile movement
+           Glance.mc     the swipe-up launch card (self-contained)
            Pac.mc        the hero's AI     Ghost.mc  the four personalities
            Game.mc       state machine     Clock.mc  time + date
            PacView.mc    rendering         PacApp.mc / PacDelegate.mc
@@ -291,5 +308,21 @@ Things that cost real time — don't rediscover them.
 - **`ComplicationSubscriber` is a watchface-only permission** and fails the
   manifest for a watch-app, so the Complications API is not a route to
   Body Battery here.
+- **A glance may not touch `Application.Storage`.** It dies with
+  `Illegal Access (Out of Bounds)`, and being a VM-level error, `try`/`catch`
+  does not save you. `AppBase.onStart` runs for the glance too, so anything
+  it calls must be glance-safe — loading the saved theme moved into the
+  view's `onLayout`, which only ever exists in the full app.
+- **A glance cannot reach `Rez` either** — `Could not access symbol 'Rez'`.
+  No `loadResource`, no custom fonts, no string resources. Draw with
+  primitives and a built-in font, and hard-code any label.
+- **`glance.excludeAnnotations` is not valid jungle syntax** in SDK 9.1
+  ("'glance' is not a valid device / family qualifier"), so the documented
+  trick for trimming the glance scope does not apply here. Keeping the glance
+  dependency-free is what keeps it inside its budget.
 - **Sideloaded apps never show `settings.xml`** in Garmin Connect Mobile.
 - **No `getVectorFont` / `drawAngledText`** on the vívoactive 5.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).

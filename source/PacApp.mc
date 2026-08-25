@@ -12,12 +12,11 @@ class PacApp extends Application.AppBase {
         AppBase.initialize();
     }
 
-    function onStart(state as Dictionary?) as Void {
-        Theme.loadChoice();
-    }
+    function onStart(state as Dictionary?) as Void {}
 
     function onStop(state as Dictionary?) as Void {
-        Theme.saveChoice();
+        // No saveChoice here: cycleWall() already persists on every change,
+        // and onStop runs for the glance too, where Storage is off-limits.
         stopTimer();
     }
 
@@ -29,6 +28,16 @@ class PacApp extends Application.AppBase {
         t.start(method(:onTick), 1000 / Game.FPS, true);
         _timer = t;
         return [v, new PacDelegate()];
+    }
+
+    // Registering a glance puts the app in the swipe-up carousel on the watch
+    // face, so it launches with a tap instead of being hunted down in the app
+    // list. Keep this method free of anything the game owns.
+    (:glance)
+    function getGlanceView() as
+            [WatchUi.GlanceView] or
+            [WatchUi.GlanceView, WatchUi.GlanceViewDelegate] or Null {
+        return [new ArcadeGlance()];
     }
 
     function onTick() as Void {
