@@ -1,0 +1,21 @@
+# Signing key. Private — never commit it. Generate your own; see the README.
+developer_key
+developer_key.der
+*.der
+*.pem
+
+# Build output. The .prg.debug.xml and the external-mir tree also embed
+# absolute source paths, so they are worth excluding on their own merits.
+bin/
+
+# macOS / Python noise
+.DS_Store
+__pycache__/
+*.pyc
+
+# Regenerable preview output from the tools/ scripts. The figures the README
+# embeds are tracked; everything else a study script emits is disposable.
+tools/*_compare.png
+tools/corner_full.png
+tools/replay_sheet.png
+tools/icons_suggested.py

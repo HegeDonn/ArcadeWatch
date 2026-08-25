@@ -1,0 +1,17 @@
+info face="PacPixel" size=49 bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=0 aa=1 padding=0,0,0,0 spacing=0,0
+common lineHeight=49 base=49 scaleW=420 scaleH=49 pages=1 packed=0
+page id=0 file="pac_big.png"
+chars count=12
+char id=32 x=0 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=35 page=0 chnl=15
+char id=48 x=35 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=49 x=70 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=50 x=105 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=51 x=140 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=52 x=175 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=53 x=210 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=54 x=245 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=55 x=280 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=56 x=315 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=57 x=350 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=42 page=0 chnl=15
+char id=58 x=385 y=0 width=35 height=49 xoffset=0 yoffset=0 xadvance=28 page=0 chnl=15
+kernings count=0

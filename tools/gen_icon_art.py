@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Generate the two sensor icons as FILLED pixel shapes from geometry.
+
+Hand-drawn outlines looked lumpy and the thin strokes left too little room
+for the number. These are solid, so the read-out is knocked *out* of them in
+black, which is far more legible at 4x than white-on-black inside a hairline.
+
+  python3 tools/gen_icon_art.py     # prints both, writes icons_suggested.py
+
+This is a design aid for proposing a starting shape, not the source of truth.
+tools/icons.py is hand-edited and this script deliberately does not touch it.
+"""
+W, H = 15, 16
+SS = 4          # supersample per cell, so edges land where the eye expects
+
+
+def render(inside):
+    art = []
+    for y in range(H):
+        row = ""
+        for x in range(W):
+            hits = 0
+            for sy in range(SS):
+                for sx in range(SS):
+                    px = x + (sx + 0.5) / SS
+                    py = y + (sy + 0.5) / SS
+                    if inside(px, py):
+                        hits += 1
+            row += "#" if hits * 2 >= SS * SS else "."
+        art.append(row)
+    return art
+
+
+def heart(x, y):
+    # Lobes set wide apart with a smaller radius, so the notch between them
+    # survives three rows instead of one -- that notch is what makes the eye
+    # read "heart" rather than "blob".
+    for cx, cy in ((3.9, 4.3), (11.1, 4.3)):
+        if (x - cx) ** 2 + (y - cy) ** 2 <= 4.1 ** 2:
+            return True
+    if y < 4.3:
+        return False
+    t = (y - 4.3) / (15.2 - 4.3)          # stubbier point than a pure triangle
+    if t > 1.0:
+        return False
+    half = 7.5 * (1.0 - t) ** 0.88
+    return abs(x - 7.5) <= half
+
+
+def bust(x, y):
+    # A head-and-shoulders silhouette. The shoulder ellipse is centred well
+    # below the icon and clipped, so where it meets the head it already has
+    # neck-width instead of tapering to a point and leaving a gap.
+    # Head: a shade larger than it needs to be, so its top row is flat rather
+    # than a single-pixel nub.
+    if (x - 7.5) ** 2 + ((y - 3.6) * 1.02) ** 2 <= 3.5 ** 2:
+        return True
+    # An explicit narrow neck. Without it the head blends into the shoulders.
+    if 5.9 <= y <= 7.6 and abs(x - 7.5) <= 1.6:
+        return True
+    # Straight sloped shoulders, not an ellipse: the curved version bellied
+    # out and read as a chess pawn.
+    if y >= 7.2:
+        half = 2.0 + (y - 7.2) * (6.9 - 2.0) / (12.0 - 7.2)
+        if half > 6.9:
+            half = 6.9
+        if abs(x - 7.5) <= half:
+            return True
+    return False
+
+
+def widest_solid_band(art):
+    """Report, per row, the longest unbroken run -- where a number can go."""
+    out = []
+    for y, row in enumerate(art):
+        best = 0
+        run = 0
+        for ch in row:
+            run = run + 1 if ch == "#" else 0
+            best = max(best, run)
+        out.append(best)
+    return out
+
+
+HEART = render(heart)
+BODY = render(bust)
+
+
+def smooth_heart_valley(art):
+    """Taper the notch between the lobes by exactly one pixel a side per row.
+
+    Raw geometry jumps straight from a 5-wide gap to a 1-wide gap, which reads
+    as a square dent bitten out of the top. Stepping 5 -> 3 -> 1 -> 0 keeps the
+    dent but makes both edges walk in evenly.
+    """
+    art = list(art)
+    art[0] = "..###.....###.."
+    art[1] = ".#####...#####."
+    art[2] = "#######.#######"
+    return art
+
+
+def trim_and_raise_bust(art):
+    """Drop the outermost column each side and lift the shoulders one row.
+
+    Full-bleed 15-wide shoulders touch the icon's bounding box and read as a
+    block; pulling them in a pixel leaves the silhouette a visible edge.
+    """
+    art = [r[:] for r in art]
+    for y in range(len(art)):
+        if art[y][0] == "#" or art[y][14] == "#":
+            art[y] = "." + art[y][1:14] + "."
+    return art
+
+
+HEART = smooth_heart_valley(HEART)
+BODY = trim_and_raise_bust(BODY)
+
+for name, art in (("HEART", HEART), ("BODY", BODY)):
+    print(name)
+    bands = widest_solid_band(art)
+    for y, r in enumerate(art):
+        print("  %2d %s  solid=%d" % (y, r.replace(".", " ").replace("#", "█"), bands[y]))
+    print()
+
+# The number is 3 glyphs of the scale-2 font = 36 px = 9 cells at scale 4,
+# and 14 px tall. Find the best 4-row window that is solid enough.
+def pick_rows(art, need=9):
+    # Never flush against the bottom edge -- a number touching the silhouette's
+    # last row reads as though it is falling out of the icon.
+    bands = widest_solid_band(art)
+    best, bestscore = None, -1
+    for top in range(H - 4):
+        win = bands[top:top + 4]
+        if min(win) < need:
+            continue
+        score = sum(win) - abs(top + 1.5 - H / 2.0)
+        if score > bestscore:
+            best, bestscore = (top, top + 3), score
+    return best
+
+hr_rows = pick_rows(HEART)
+bb_rows = pick_rows(BODY)
+print("HEART text rows:", hr_rows, " BODY text rows:", bb_rows)
+
+with open("tools/icons_suggested.py", "w") as f:
+    f.write('"""GENERATED by tools/gen_icon_art.py -- edit that, not this.\n\n'
+            'Filled pixel icons for the sensor read-outs. The number is knocked\n'
+            'out of them in black, so they must be solid where the text sits:\n'
+            'HEART rows %s and BODY rows %s are each at least 9 cells wide,\n'
+            'which is the 36 px a three-digit scale-2 number needs at 4x.\n"""\n\n'
+            % (hr_rows, bb_rows))
+    for name, art in (("HEART", HEART), ("BODY", BODY)):
+        f.write("%s = [\n" % name)
+        for r in art:
+            f.write('    "%s",\n' % r)
+        f.write("]\n\n")
+    f.write("W, H = %d, %d\n\n" % (W, H))
+    f.write("HEART_TEXT_ROWS = (%d, %d)\n" % hr_rows)
+    f.write("BODY_TEXT_ROWS = (%d, %d)\n\n" % bb_rows)
+    f.write('''
+
+def runs(art):
+    """Merge each row's lit pixels into horizontal runs: (row, x0, x1)."""
+    out = []
+    for y, row in enumerate(art):
+        x = 0
+        while x < W:
+            if row[x] == "#":
+                x0 = x
+                while x < W and row[x] == "#":
+                    x += 1
+                out.append((y, x0, x - 1))
+            else:
+                x += 1
+    return out
+''')
+print("wrote tools/icons_suggested.py "
+      "(tools/icons.py is hand-edited and is NOT touched)")
