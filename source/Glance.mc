@@ -20,15 +20,15 @@ class ArcadeGlance extends WatchUi.GlanceView {
     function onUpdate(dc as Dc) as Void {
         var w = dc.getWidth();
         var h = dc.getHeight();
-        dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_BLACK);
-        dc.clear();
+        // No clear(): the system draws the card background, and painting
+        // black over it blocked the native colour out.
 
         // Label on the left, the chase scene filling whatever is left.
         dc.setColor(0xFFFF00, Graphics.COLOR_TRANSPARENT);
         // Literal, not Rez.Strings.AppName: a glance cannot reach Rez at all
         // ("Could not access symbol 'Rez'"), and the whole point of this view
         // is to depend on nothing.
-        var label = "ARCADE";
+        var label = "PACMAN";
         dc.drawText(2, h / 2, Graphics.FONT_TINY, label,
                     Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
 

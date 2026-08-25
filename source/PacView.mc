@@ -1,6 +1,5 @@
 import Toybox.Graphics;
 import Toybox.Lang;
-import Toybox.Math;
 import Toybox.System;
 import Toybox.WatchUi;
 
@@ -20,9 +19,6 @@ class PacView extends WatchUi.View {
     // Draw offset, so an entire frame can be shifted for the swipe animation.
     private var _ox as Number = 0;
     private var _oy as Number = 0;
-
-    // Screen-space angle of each direction (y grows downward).
-    private const ANG = [-Math.PI / 2, Math.PI, Math.PI / 2, 0.0] as Array<Float>;
 
     function initialize() {
         View.initialize();
@@ -186,39 +182,38 @@ class PacView extends WatchUi.View {
 
     // ---- sprites ----------------------------------------------------------
 
+    // Explicit pixels, not fillCircle plus a black wedge. At a 9 px sprite the
+    // rasteriser was deciding the shape for us: Garmin renders fillCircle(r=4)
+    // as an 8 px diameter, so the body came out 9 wide by 8 tall and the back
+    // tapered to a 3 px point -- visibly chopped on the watch.
     private function drawPac(dc as Dc) as Void {
         var p = Game.pac;
-        var px = p.pixX() + _ox;
-        var py = p.pixY() + _oy;
-        var r = (Layout.cell * 11) / 20;
-
-        var half;
+        var idx;
         if (Game.state == Game.DYING) {
-            // He opens up until there is nothing left of him.
-            var f = p.deathFrame.toFloat() / Game.DEATH_FRAMES;
-            if (f > 1.0) { f = 1.0; }
-            half = f * Math.PI;
-            if (f >= 0.98) { return; }
+            var f = (p.deathFrame * SpriteData.DEATH_COUNT) / Game.DEATH_FRAMES;
+            if (f >= SpriteData.DEATH_COUNT) { return; }   // gone
+            idx = SpriteData.DEATH_FIRST + f;
         } else {
-            half = p.mouthOpen() * 0.36;
+            idx = p.dir * SpriteData.PHASES + p.mouthOpen();
         }
+        drawSprite(dc, idx, p.pixX() + _ox, p.pixY() + _oy, Theme.PACMAN);
+    }
 
-        dc.setColor(Theme.PACMAN, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(px, py, r);
-        if (half <= 0.01) { return; }
-
-        var a = ANG[p.dir];
-        var reach = r + 2;
-        dc.setColor(Theme.BG, Graphics.COLOR_TRANSPARENT);
-        dc.fillPolygon([
-            [px, py],
-            [px + (reach * Math.cos(a - half)).toNumber(),
-             py + (reach * Math.sin(a - half)).toNumber()],
-            [px + (reach * Math.cos(a)).toNumber(),
-             py + (reach * Math.sin(a)).toNumber()],
-            [px + (reach * Math.cos(a + half)).toNumber(),
-             py + (reach * Math.sin(a + half)).toNumber()]
-        ]);
+    // One sprite, centred on (cx, cy), as ~8 one-pixel-tall runs.
+    private function drawSprite(dc as Dc, idx as Number, cx as Number,
+                                cy as Number, colour as Number) as Void {
+        var half = SpriteData.S / 2;
+        var x0 = cx - half;
+        var y0 = cy - half;
+        var off = SpriteData.OFF[idx];
+        var n = SpriteData.CNT[idx];
+        var runs = SpriteData.RUNS;
+        dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
+        for (var i = 0; i < n; i++) {
+            var b = (off + i) * 3;
+            dc.fillRectangle(x0 + runs[b + 1], y0 + runs[b],
+                             runs[b + 2] - runs[b + 1] + 1, 1);
+        }
     }
 
     private function drawGhost(dc as Dc, g as Ghost) as Void {

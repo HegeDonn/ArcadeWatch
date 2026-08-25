@@ -45,6 +45,7 @@ Regenerating the baked assets (only needed if you edit the maze or the font):
 ```bash
 python3 tools/gen_maze_mc.py    # tools/maze.py    -> source/MazeData.mc
 python3 tools/gen_icons_mc.py   # tools/icons.py   -> source/IconData.mc
+python3 tools/gen_sprites_mc.py # tools/sprites.py -> source/SpriteData.mc
 python3 tools/gen_fonts.py      # tools/pixfont.py -> resources/fonts/*
 python3 tools/gen_icon.py       # launcher icon
 ```
@@ -58,7 +59,8 @@ Hunting through the app list gets old, so there are two faster routes:
 
 - **The glance.** Swipe up or down from the watch face and the app appears as
   a card in the carousel; tap it to launch. That is what `source/Glance.mc`
-  provides.
+  provides. It measures 6.4 KB of its 64 KB budget, so staying
+  dependency-free was the right call.
 - **A hot key.** On the watch: **Settings ▸ System ▸ Hot Keys**, pick a
   button and a press-and-hold action, and assign Arcade Watch. One long press
   from anywhere and it opens — no swiping at all.
@@ -265,12 +267,15 @@ source/    MazeData.mc   generated: 28-bit-per-row masks + merged wall runs
            Maze.mc       runtime dot state, tile queries
            Nav.mc        the flood fill (hot path; stamps, masks, unrolled)
            Actor.mc      tile-to-tile movement
+           SpriteData.mc generated: Pac-Man's pixels, 4 dirs x 3 phases
            Glance.mc     the swipe-up launch card (self-contained)
            Pac.mc        the hero's AI     Ghost.mc  the four personalities
            Game.mc       state machine     Clock.mc  time + date
            PacView.mc    rendering         PacApp.mc / PacDelegate.mc
 tools/     maze.py pixfont.py icons.py     hand-edited sources of truth
+           sprites.py                      Pac-Man's art, also hand-editable
            gen_maze_mc.py gen_icons_mc.py  bake those into source/*Data.mc
+           gen_sprites_mc.py               rotates + bakes the sprites
            gen_fonts.py gen_icon.py        bake them into resources/
            gen_icon_art.py                 proposes an icon shape from geometry
            render.py replay.py             offline mirror + trace replay
@@ -320,6 +325,13 @@ Things that cost real time — don't rediscover them.
   ("'glance' is not a valid device / family qualifier"), so the documented
   trick for trimming the glance scope does not apply here. Keeping the glance
   dependency-free is what keeps it inside its budget.
+- **Don't call `dc.clear()` in a glance.** The system paints the card
+  background; clearing puts a black block over it and the native card colour
+  is lost.
+- **`fillCircle(r)` is not `2r+1` pixels across.** Garmin renders `r=4` as an
+  8 px diameter, so a sprite built from a circle plus a wedge came out 9 wide
+  by 8 tall with the back tapered to a 3 px point. At sprite sizes the
+  rasteriser makes the decisions; explicit pixel art takes them back.
 - **Sideloaded apps never show `settings.xml`** in Garmin Connect Mobile.
 - **No `getVectorFont` / `drawAngledText`** on the vívoactive 5.
 
