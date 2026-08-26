@@ -15,10 +15,20 @@ module Theme {
 
     function wall() as Number { return WALLS[wallIdx]; }
 
+    var _dirty as Boolean = false;
+
     function cycleWall(dir as Number) as Number {
         wallIdx = (wallIdx + dir + WALLS.size()) % WALLS.size();
-        saveChoice();
+        // Not saved here: a flick can roll through several colours, and that
+        // would be a storage write per colour mid-animation.
+        _dirty = true;
         return wallIdx;
+    }
+
+    function flush() as Void {
+        if (!_dirty) { return; }
+        _dirty = false;
+        saveChoice();
     }
 
     // The colour a drag is heading toward, without committing to it.

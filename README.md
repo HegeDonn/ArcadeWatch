@@ -111,9 +111,23 @@ during READY a tap still skips the dwell as before.
 **Drag sideways** to recolour and **up or down** to change game. The screen
 follows your finger rather than waiting for a gesture to finish: the game you
 are leaving moves with the drag and the next one is parked exactly one screen
-further along, so the two travel as a single sheet. Let go past a quarter of
-the way and it carries through; let go short and it springs back. Six colours,
-and the choice survives closing the app. **Tap** skips the clock dwell.
+further along, so the two travel as a single sheet. Let go and it keeps its momentum: a
+gentle release settles on the nearest screen, a firm one rolls through two or
+three before friction brings it down. Release without speed and the quarter-way
+mark decides whether it carries through or springs back. Six colours, and the
+choice survives closing the app. **Tap** skips the clock dwell.
+
+| release | result |
+|---|---|
+| nudge, finger still | springs back |
+| deliberate drag, no speed | one step past a quarter of the way |
+| flick | one step, settling in ~1.5 s |
+| firm swipe | two steps |
+| hard fling | three, stopping inside 2.5 s |
+
+A throw that has already stepped settles onto whichever screen it stopped
+nearest; one that has not needs only a third of the way, because a deliberate
+flick should always get you somewhere.
 
 Swipes that arrive as a gesture or a page behaviour instead of as drag events
 still work, and are ignored if a drag has just handled the same movement, so
@@ -385,6 +399,13 @@ Things that cost real time — don't rediscover them.
 - **An open polyline has one more vertex than it has segments.** Walking both
   in a single loop dropped the last spoke and the last rim edge, which left
   Tempest's open levels visibly unfinished at one end.
+- **Monkey C integer division truncates toward zero.** Friction modelled with
+  Python's floor division never decayed a negative velocity at all, so the
+  momentum "settled" after twenty seconds instead of two. Model the language
+  you are writing, not the one you are modelling in.
+- **Don't write to `Application.Storage` mid-animation.** A flick rolls
+  through several colours, and saving on each one is a storage write per frame;
+  the choice is marked dirty and flushed once the throw stops.
 - **Sideloaded apps never show `settings.xml`** in Garmin Connect Mobile.
 - **No `getVectorFont` / `drawAngledText`** on the vívoactive 5.
 

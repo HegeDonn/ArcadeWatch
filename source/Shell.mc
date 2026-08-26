@@ -47,6 +47,14 @@ module Shell {
     const TAKE_FRACTION = 4;          // drag a quarter of the way to commit
     const AXIS_SLOP = 8;              // px before we decide which way you meant
 
+    // Momentum. Let go with some speed and it keeps rolling, stepping to the
+    // next game or colour each time a whole screen goes past, until friction
+    // brings it down and it settles on whichever one it stopped nearest.
+    const FLING_MIN = 6;              // px/frame worth carrying on with
+    const FLING_STOP = 3;             // below this, settle
+    const FRICTION_NUM = 29;          // velocity *= 29/32 each frame
+    const FRICTION_DEN = 32;
+
     const CHANGE_COLOUR = 0;
     const CHANGE_GAME = 1;
 
@@ -57,6 +65,9 @@ module Shell {
     var settleFrom as Number = 0;
     var settleTo as Number = 0;
     var committing as Boolean = false;
+    var velocity as Number = 0;
+    var flinging as Boolean = false;
+    var flingSteps as Number = 0;
 
     var _startX as Number = 0;
     var _startY as Number = 0;
@@ -71,12 +82,14 @@ module Shell {
     function delta() as Number { return (offset < 0) ? 1 : -1; }
 
     function sliding() as Boolean {
-        return dragging || settling > 0 || offset != 0;
+        return dragging || flinging || settling > 0 || offset != 0;
     }
 
     function dragStart(x as Number, y as Number) as Void {
-        if (settling > 0) { return; }
         dragging = true;
+        flinging = false;
+        settling = 0;
+        velocity = 0;
         axis = -1;
         offset = 0;
         _startX = x;
@@ -97,6 +110,9 @@ module Shell {
         var lim = span();
         if (d > lim) { d = lim; }
         if (d < -lim) { d = -lim; }
+        // Smoothed, because drag events do not arrive one per frame and a
+        // single jittery sample should not decide the whole throw.
+        velocity = (velocity + (d - offset) * 2) / 3;
         offset = d;
     }
 
@@ -104,17 +120,57 @@ module Shell {
         if (!dragging) { return; }
         dragging = false;
         _lastDrag = System.getTimer();
-        if (axis < 0 || offset == 0) { offset = 0; axis = -1; return; }
+        if (axis < 0 || (offset == 0 && velocity.abs() < FLING_MIN)) {
+            offset = 0;
+            axis = -1;
+            return;
+        }
+        var lim = span() / 2;
+        if (velocity > lim) { velocity = lim; }
+        if (velocity < -lim) { velocity = -lim; }
+        if (velocity.abs() >= FLING_MIN) {
+            flinging = true;              // let it roll
+            flingSteps = 0;
+            return;
+        }
         settleFrom = offset;
         committing = offset.abs() * TAKE_FRACTION >= span();
         settleTo = committing ? ((offset < 0) ? -span() : span()) : 0;
         settling = SETTLE_FRAMES;
     }
 
+    // Coast, stepping one game or colour per screen that goes past.
+    function tickFling() as Void {
+        var sp = span();
+        offset += velocity;
+        velocity = (velocity * FRICTION_NUM) / FRICTION_DEN;
+
+        while (offset <= -sp) { offset += sp; stepChange(1); flingSteps++; }
+        while (offset >= sp) { offset -= sp; stepChange(-1); flingSteps++; }
+
+        if (velocity.abs() >= FLING_STOP) { return; }
+        flinging = false;
+        settleFrom = offset;
+        // A throw that already stepped settles onto whichever screen it
+        // stopped nearest; one that has not yet stepped only needs a third of
+        // the way, because a deliberate flick should always get you somewhere.
+        committing = (flingSteps > 0)
+                   ? (offset.abs() * 2 >= sp)
+                   : (offset.abs() * 3 >= sp);
+        settleTo = committing ? ((offset < 0) ? -sp : sp) : 0;
+        settling = SETTLE_FRAMES;
+    }
+
+    function stepChange(d as Number) as Void {
+        if (axis == 0) { Theme.cycleWall(d); }
+        else { switchTo((game + d + COUNT) % COUNT); }
+    }
+
     // A swipe that arrives as a gesture or a behaviour, on a device or in a
     // state where the drag events did not. Ignored if a drag just handled it.
     function flick(ax as Number, dir as Number) as Void {
         if (sliding() || System.getTimer() - _lastDrag < 400) { return; }
+        velocity = 0;
         axis = ax;
         settleFrom = 0;
         offset = (dir > 0) ? -1 : 1;
@@ -134,15 +190,12 @@ module Shell {
         offset = 0;
         axis = -1;
         committing = false;
+        velocity = 0;
+        Theme.flush();            // one storage write per throw, not per step
     }
 
     function applyChange() as Void {
-        var d = (settleTo < 0) ? 1 : -1;
-        if (axis == 0) {
-            Theme.cycleWall(d);
-        } else {
-            switchTo((game + d + COUNT) % COUNT);
-        }
+        stepChange((settleTo < 0) ? 1 : -1);
     }
 
     // Games keep their state, so flicking between them resumes rather than
@@ -194,6 +247,10 @@ module Shell {
             Sensors.poll(frame);
         }
         if (dragging) { return; }              // frozen under your finger
+        if (flinging) {
+            tickFling();
+            return;
+        }
         if (settling > 0) {
             tickSlide();
             return;
