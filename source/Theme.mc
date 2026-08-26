@@ -15,10 +15,15 @@ module Theme {
 
     function wall() as Number { return WALLS[wallIdx]; }
 
-    function cycleWall() as Number {
-        wallIdx = (wallIdx + 1) % WALLS.size();
+    function cycleWall(dir as Number) as Number {
+        wallIdx = (wallIdx + dir + WALLS.size()) % WALLS.size();
         saveChoice();
         return wallIdx;
+    }
+
+    // The colour a drag is heading toward, without committing to it.
+    function peekWall(dir as Number) as Number {
+        return WALLS[(wallIdx + dir + WALLS.size()) % WALLS.size()];
     }
 
     // The kids' colour survives closing the app.

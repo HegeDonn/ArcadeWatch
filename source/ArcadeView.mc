@@ -14,11 +14,12 @@ class ArcadeView extends WatchUi.View {
     // be allocated the recolour still works, it just snaps instead of sliding.
     private var _bufNext as Graphics.BufferedBitmap? = null;
     private var _flashOn as Boolean = false;
+    private var _bufNextColour as Number = -1;
     private var _started as Boolean = false;
 
     // Draw offset, so an entire frame can be shifted for the swipe animation.
-    // The colour the outgoing half of a slide was drawn in.
-    private var _slideFrom as Number = Theme.WALLS[0];
+    // Which game the half currently being drawn belongs to.
+    private var _drawingGame as Number = 0;
     private var _ox as Number = 0;
     private var _oy as Number = 0;
 
@@ -34,9 +35,9 @@ class ArcadeView extends WatchUi.View {
         makeBuffer(dc.getWidth(), dc.getHeight());
         if (!_started) {
             _started = true;
-            // Whichever game is showing, not Pac-Man specifically -- booting
-            // straight into another one otherwise left it never initialised.
-            Shell.reset();
+            // All of them: a drag previews its neighbour, so any game can be
+            // asked to draw itself at any moment.
+            Shell.initAll();
         }
     }
 
@@ -321,7 +322,7 @@ class ArcadeView extends WatchUi.View {
     // stray dots -- nobody expects a fruit count under Asteroids -- so the
     // rest of the cabinet keeps a clean bottom edge.
     private function drawStatus(dc as Dc) as Void {
-        if (Shell.game != Shell.PACMAN) { return; }
+        if (_drawingGame != Shell.PACMAN) { return; }
 
         var w = dc.getWidth() + _ox * 2;
         var y = Layout.livesY + _oy;
@@ -393,20 +394,20 @@ class ArcadeView extends WatchUi.View {
     // Pac-Man's maze is cached in a buffer; the other games are cheap enough
     // to draw outright, and are handed the offset so they slide with everything
     // else.
-    private function drawPlayfield(dc as Dc, flashing as Boolean,
+    private function drawPlayfield(dc as Dc, g as Number, flashing as Boolean,
                                    colour as Number) as Void {
-        if (Shell.game == Shell.PACMAN) {
+        if (g == Shell.PACMAN) {
             if (flashing) { return; }
             drawPellets(dc);
             if (PacGame.state != PacGame.DYING) {
                 for (var i = 0; i < 4; i++) { drawGhost(dc, PacGame.ghosts[i]); }
             }
             if (PacGame.state != PacGame.GAME_OVER) { drawPac(dc); }
-        } else if (Shell.game == Shell.INVADERS) {
+        } else if (g == Shell.INVADERS) {
             Invaders.draw(dc, _ox, _oy, colour);
-        } else if (Shell.game == Shell.BRICKS) {
+        } else if (g == Shell.BRICKS) {
             Bricks.draw(dc, _ox, _oy, colour);
-        } else if (Shell.game == Shell.ROCKS) {
+        } else if (g == Shell.ROCKS) {
             Rocks.draw(dc, _ox, _oy, colour);
         } else {
             Tempest.draw(dc, _ox, _oy, colour);
@@ -414,18 +415,19 @@ class ArcadeView extends WatchUi.View {
     }
 
     private function drawScene(dc as Dc, buf as Graphics.BufferedBitmap?,
-                               ox as Number, oy as Number,
+                               ox as Number, oy as Number, g as Number,
                                flashing as Boolean, colour as Number) as Void {
         _ox = ox;
         _oy = oy;
-        if (Shell.game == Shell.PACMAN) {
+        _drawingGame = g;
+        if (g == Shell.PACMAN) {
             if (buf != null) {
                 dc.drawBitmap(ox, oy, buf);
             } else {
                 paintMaze(dc, _flashOn ? Theme.WALL_FLASH : colour, true);
             }
         }
-        drawPlayfield(dc, flashing, colour);
+        drawPlayfield(dc, g, flashing, colour);
         drawScoreTime(dc);
         drawStatus(dc);
         var peek = Shell.showingInfo();
@@ -436,26 +438,13 @@ class ArcadeView extends WatchUi.View {
     }
 
     function onUpdate(dc as Dc) as Void {
-        var flashing = (Shell.game == Shell.PACMAN
-                        && PacGame.state == PacGame.LEVEL_DONE);
         var w = dc.getWidth();
         var h = dc.getHeight();
+        var g = Shell.game;
+        var flashing = (g == Shell.PACMAN && PacGame.state == PacGame.LEVEL_DONE);
+        var sliding = Shell.sliding();
 
-        // A swipe has just landed. Remember the colour the outgoing half must
-        // be drawn in; the change itself is applied mid-animation, below.
-        if (Shell.slideArmed) {
-            Shell.slideArmed = false;
-            _slideFrom = Theme.wall();
-            if (_bufNext == null && Shell.game == Shell.PACMAN) {
-                Shell.slideStep = 0;          // no spare buffer: snap instead
-                Shell.applyPending();
-                PacGame.mazeDirty = true;
-            }
-        }
-
-        var sliding = (Shell.slideStep > 0);
-
-        if (!sliding && Shell.game == Shell.PACMAN) {
+        if (!sliding && g == Shell.PACMAN) {
             if (flashing) {
                 var on = ((PacGame.timer / 4) % 2) == 0;
                 if (on != _flashOn || PacGame.mazeDirty) {
@@ -476,38 +465,42 @@ class ArcadeView extends WatchUi.View {
         dc.setColor(Theme.BG, Theme.BG);
         dc.clear();
 
-        if (sliding) {
-            var e = Shell.slideProgress();
-            var d = Shell.slideDir;
-            var span = (Shell.slideAxis == 0) ? w : h;
-            var shift = -d * (e * span) / 100;
-            var ox = (Shell.slideAxis == 0) ? shift : 0;
-            var oy = (Shell.slideAxis == 0) ? 0 : shift;
-            var nx = (Shell.slideAxis == 0) ? ox + d * w : 0;
-            var ny = (Shell.slideAxis == 0) ? 0 : oy + d * h;
-
-            drawScene(dc, _buf, ox, oy, flashing, _slideFrom);
-
-            // The change lands *between* the two halves, so the outgoing
-            // screen is the old state and the incoming one is the new.
-            if (Shell.pendingChange >= 0) {
-                Shell.applyPending();
-                if (Shell.game == Shell.PACMAN && _bufNext != null) {
-                    paintMaze((_bufNext as Graphics.BufferedBitmap).getDc(),
-                              Theme.wall(), true);
-                }
-            }
-            drawScene(dc, _bufNext, nx, ny, false, Theme.wall());
-
-            if (Shell.slideStep <= 1) {
-                var t = _buf;
-                _buf = _bufNext;
-                _bufNext = t;
-                if (Shell.game == Shell.PACMAN) { PacGame.mazeDirty = false; }
-            }
+        if (!sliding) {
+            drawScene(dc, _buf, 0, 0, g, flashing, Theme.wall());
             return;
         }
 
-        drawScene(dc, _buf, 0, 0, flashing, Theme.wall());
+        // Following the finger: this screen sits at the drag offset and the
+        // incoming one is parked exactly one screen further along, so the two
+        // move as one sheet.
+        var off = Shell.offset;
+        var vertical = (Shell.axis == 1);
+        var sp = vertical ? h : w;
+        var ox = vertical ? 0 : off;
+        var oy = vertical ? off : 0;
+        var lead = (off < 0) ? sp : -sp;
+        var nx = vertical ? 0 : ox + lead;
+        var ny = vertical ? oy + lead : 0;
+
+        var inG = Shell.incomingGame();
+        var inCol = (Shell.axis == 0) ? Theme.peekWall(Shell.delta()) : Theme.wall();
+
+        drawScene(dc, _buf, ox, oy, g, flashing, Theme.wall());
+
+        // Pac-Man's maze is cached, so the incoming half needs its own copy
+        // whenever the colour it should be drawn in differs from the cache.
+        var inBuf = null;
+        if (inG == Shell.PACMAN) {
+            if (inG == g && inCol == Theme.wall()) {
+                inBuf = _buf;
+            } else if (_bufNext != null) {
+                if (_bufNextColour != inCol) {
+                    paintMaze((_bufNext as Graphics.BufferedBitmap).getDc(), inCol, true);
+                    _bufNextColour = inCol;
+                }
+                inBuf = _bufNext;
+            }
+        }
+        drawScene(dc, inBuf, nx, ny, inG, false, inCol);
     }
 }

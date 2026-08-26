@@ -8,9 +8,9 @@ replaced by the time and date in big pixel type.
 Nobody plays any of them. They run themselves, forever — the watch is
 permanently in *attract mode*.
 
-| swipe up / down | change game |
+| drag up / down | change game |
 |---|---|
-| swipe left / right | recolour |
+| drag left / right | recolour |
 | tap | peek at heart rate and Body Battery for 5 s |
 | BACK | exit |
 
@@ -22,7 +22,9 @@ allows; **Asteroids**, which wraps *radially* — leave the bezel anywhere and y
 re-enter diametrically opposite, which suits a round screen far better than
 the cabinet's rectangular wrap; and **Tempest**, the one game whose playfield
 genuinely *is* a circle, so for once the bezel is the edge of the play area
-and nothing has to be fitted or cropped at all.
+and nothing has to be fitted or cropped at all — and whose levels are not all
+circles: a square, a plus, a pinwheel, and an open trough with walls at each
+end that you cannot wrap around.
 
 > A homage to the 1980 arcade classic, built for fun on a personal
 > smartwatch. Not affiliated with, endorsed by, or connected to Bandai Namco
@@ -106,9 +108,16 @@ during READY a tap still skips the dwell as before.
 
 ![peek](tools/peek.png)
 
-**Swipe sideways** to recolour and **up or down** to change game — either way
-the whole screen slides off and the new one follows it in. Six colours, and
-the choice survives closing the app. **Tap** skips the clock dwell.
+**Drag sideways** to recolour and **up or down** to change game. The screen
+follows your finger rather than waiting for a gesture to finish: the game you
+are leaving moves with the drag and the next one is parked exactly one screen
+further along, so the two travel as a single sheet. Let go past a quarter of
+the way and it carries through; let go short and it springs back. Six colours,
+and the choice survives closing the app. **Tap** skips the clock dwell.
+
+Swipes that arrive as a gesture or a page behaviour instead of as drag events
+still work, and are ignored if a drag has just handled the same movement, so
+nothing ever acts twice.
 
 ![swipe](tools/swipe_slide.png)
 
@@ -283,6 +292,7 @@ tap-to-peek were checked.
 source/    Shell.mc      which game is showing, the swipe, the sensor peek
            PacGame.mc    the maze chase
            Invaders.mc Bricks.mc Rocks.mc Tempest.mc
+           TempestData.mc generated: the level rims
            Trig.mc       integer sin/cos on a 64-step circle
            InvaderData.mc generated: the invader sprites as run lists
            MazeData.mc   generated: 28-bit-per-row masks + merged wall runs
@@ -298,6 +308,7 @@ source/    Shell.mc      which game is showing, the swipe, the sensor peek
            PacView.mc    rendering         PacApp.mc / PacDelegate.mc
 tools/     maze.py pixfont.py icons.py     hand-edited sources of truth
            sprites.py invaders.py          more hand-editable art
+           tempest_levels.py               the level shapes
            gen_maze_mc.py gen_icons_mc.py  bake those into source/*Data.mc
            gen_sprites_mc.py               rotates + bakes the sprites
            gen_invaders_mc.py              bakes the invader sprites
@@ -367,6 +378,13 @@ Things that cost real time — don't rediscover them.
 - **Initialise whichever game is showing, not a specific one.** The view used
   to call Pac-Man's `newGame()` on layout; booting into any other game left it
   with untouched arrays — no bricks, ball at (0, 0).
+- **Anything drawable must be initialised, not just the game on screen.** A
+  drag previews the neighbouring game live under your finger, so any game can
+  be asked to draw itself at any moment — drawing one that had never been
+  reset walked straight into its empty arrays.
+- **An open polyline has one more vertex than it has segments.** Walking both
+  in a single loop dropped the last spoke and the last rim edge, which left
+  Tempest's open levels visibly unfinished at one end.
 - **Sideloaded apps never show `settings.xml`** in Garmin Connect Mobile.
 - **No `getVectorFont` / `drawAngledText`** on the vívoactive 5.
 

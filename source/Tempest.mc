@@ -10,14 +10,18 @@ import Toybox.Math;
 // fitted to fit -- every other game on this watch wastes the corners it does
 // not have.
 //
-// The web is 16 segments, which is 4 units of the 64-step trig table apiece,
-// so every angle in here is exact integer arithmetic. Depth runs 0 at the far
-// end to DEEP at the rim.
+// A level is its rim, taken from TempestData: a circle, a square, a plus, a
+// pinwheel, or an open trough with walls at each end. The far end of the tube
+// is the same outline shrunk toward the centre, so one table of points
+// decides the whole shape -- and segment counts differ per level, because
+// corners are kept rather than resampled away.
+//
+// Depth runs 0 at the far end to DEEP at the rim.
 module Tempest {
 
-    const SEG = 16;
-    const STEP = Trig.TURN / SEG;         // 4 units of the circle per segment
     const DEEP = 256;                     // depth at the rim
+    const NEAR_PCT = 100;                 // rim, as a percentage of full size
+    const FAR_PCT = 24;                   // far end of the tube
 
     const READY = 0; const PLAY = 1; const DYING = 2; const OVER = 3;
     const READY_FRAMES = 4 * Shell.FPS;
@@ -49,27 +53,45 @@ module Tempest {
 
     var cx as Number = 195;
     var cy as Number = 195;
-    var outerR as Number = 170;
-    var innerR as Number = 42;
+    var scale as Number = 170;
+    var shape as Number = 0;
     var laidOut as Boolean = false;
 
     function layout() as Void {
         cx = Layout.screenW / 2;
         cy = Layout.screenH / 2;
         var m = (Layout.screenW < Layout.screenH) ? Layout.screenW : Layout.screenH;
-        outerR = m / 2 - 24;
-        innerR = m / 9;
+        scale = m / 2 - 22;
         laidOut = true;
     }
 
-    function radiusAt(d as Number) as Number {
-        return innerR + ((outerR - innerR) * d) / DEEP;
+    function segCount() as Number { return TempestData.NSEG[shape]; }
+    function isClosed() as Boolean { return TempestData.CLOSED[shape] == 1; }
+
+    // Rim vertex i, projected to depth d. Points are normalised to 1000, so
+    // this is (normalised * pixels * percent) / (1000 * 100).
+    function pctAt(d as Number) as Number {
+        return FAR_PCT + ((NEAR_PCT - FAR_PCT) * d) / DEEP;
     }
-    function px(a as Number, r as Number) as Number {
-        return cx + (Trig.cos(a) * r) / 256;
+    function vx(i as Number, d as Number) as Number {
+        var p = TempestData.OFF[shape] + i;
+        return cx + (TempestData.PX[p] * scale * pctAt(d)) / 100000;
     }
-    function py(a as Number, r as Number) as Number {
-        return cy + (Trig.sin(a) * r) / 256;
+    function vy(i as Number, d as Number) as Number {
+        var p = TempestData.OFF[shape] + i;
+        return cy + (TempestData.PY[p] * scale * pctAt(d)) / 100000;
+    }
+    // The far vertex of a segment wraps only on a closed rim.
+    function nextV(i as Number) as Number {
+        var n = segCount();
+        return isClosed() ? (i + 1) % n : i + 1;
+    }
+    // Centre of a segment, for things that sit in the middle of one.
+    function midX(s as Number, d as Number) as Number {
+        return (vx(s, d) + vx(nextV(s), d)) / 2;
+    }
+    function midY(s as Number, d as Number) as Number {
+        return (vy(s, d) + vy(nextV(s), d)) / 2;
     }
 
     function reset() as Void {
@@ -80,6 +102,7 @@ module Tempest {
     }
 
     function newWave() as Void {
+        shape = (level - 1) % TempestData.LEVELS;
         for (var i = 0; i < MAXE; i++) { eLive[i] = 0; }
         enemies = 0;
         spawnLeft = 6 + level * 2;
@@ -91,7 +114,7 @@ module Tempest {
     }
 
     function respawn() as Void {
-        playerSeg = 0;
+        playerSeg = segCount() / 2;
         fireLock = 0;
         for (var i = 0; i < MAXB; i++) { bLive[i] = 0; }
     }
@@ -137,7 +160,7 @@ module Tempest {
         if (spawnTimer < 6) { spawnTimer = 6; }
         for (var i = 0; i < MAXE; i++) {
             if (eLive[i] == 1) { continue; }
-            eSeg[i] = Math.rand() % SEG;
+            eSeg[i] = Math.rand() % segCount();
             eDepth[i] = 0;
             eLive[i] = 1;
             eFlip[i] = 10 + (Math.rand() % 30);
@@ -157,7 +180,7 @@ module Tempest {
             eFlip[i]--;
             if (eFlip[i] <= 0) {
                 eFlip[i] = 14 + (Math.rand() % 26);
-                eSeg[i] = (eSeg[i] + ((Math.rand() % 2 == 0) ? 1 : SEG - 1)) % SEG;
+                eSeg[i] = step(eSeg[i], (Math.rand() % 2 == 0) ? 1 : -1);
             }
 
             if (eDepth[i] >= DEEP) {
@@ -170,6 +193,17 @@ module Tempest {
                 }
             }
         }
+    }
+
+    // One segment along the rim. A closed rim wraps; an open one has ends and
+    // simply stops, which is the whole point of the open levels.
+    function step(s as Number, dir as Number) as Number {
+        var n = segCount();
+        if (isClosed()) { return (s + dir + n) % n; }
+        var v = s + dir;
+        if (v < 0) { return 0; }
+        if (v >= n) { return n - 1; }
+        return v;
     }
 
     // Track whichever enemy is nearest the rim, going the short way round.
@@ -187,9 +221,13 @@ module Tempest {
 
         var target = eSeg[best];
         if (target != playerSeg) {
-            var fwd = (target - playerSeg + SEG) % SEG;
-            playerSeg = (fwd <= SEG / 2) ? (playerSeg + 1) % SEG
-                                         : (playerSeg + SEG - 1) % SEG;
+            var n = segCount();
+            var dir = (target > playerSeg) ? 1 : -1;
+            if (isClosed()) {
+                var fwd = (target - playerSeg + n) % n;
+                dir = (fwd <= n / 2) ? 1 : -1;
+            }
+            playerSeg = step(playerSeg, dir);
         }
         if (fireLock <= 0) { fire(); }
     }
@@ -224,35 +262,44 @@ module Tempest {
 
     function draw(dc as Dc, ox as Number, oy as Number, colour as Number) as Void {
         if (!laidOut) { layout(); }
+        var n = segCount();
+        var closed = isClosed();
         dc.setPenWidth(1);
         dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
 
-        // The web: both rims as 16-gons, plus a spoke on every boundary.
-        for (var s = 0; s < SEG; s++) {
-            var a0 = s * STEP;
-            var a1 = (s + 1) * STEP;
-            dc.drawLine(ox + px(a0, outerR), oy + py(a0, outerR),
-                        ox + px(a1, outerR), oy + py(a1, outerR));
-            dc.drawLine(ox + px(a0, innerR), oy + py(a0, innerR),
-                        ox + px(a1, innerR), oy + py(a1, innerR));
-            dc.drawLine(ox + px(a0, innerR), oy + py(a0, innerR),
-                        ox + px(a0, outerR), oy + py(a0, outerR));
+        // The web: a spoke at every vertex, then the near and far rim along
+        // every segment.
+        //
+        // An open rim has one more vertex than it has segments. Walking these
+        // together in a single loop dropped the last spoke and the last rim
+        // edge, which left the open levels visibly unfinished at one end.
+        var verts = closed ? n : n + 1;
+        for (var i = 0; i < verts; i++) {
+            dc.drawLine(ox + vx(i, DEEP), oy + vy(i, DEEP),
+                        ox + vx(i, 0), oy + vy(i, 0));
+        }
+        for (var s = 0; s < n; s++) {
+            var j = nextV(s);
+            dc.drawLine(ox + vx(s, DEEP), oy + vy(s, DEEP),
+                        ox + vx(j, DEEP), oy + vy(j, DEEP));
+            dc.drawLine(ox + vx(s, 0), oy + vy(s, 0),
+                        ox + vx(j, 0), oy + vy(j, 0));
         }
 
         // Enemies: a bowtie straddling their segment at their depth.
         dc.setColor(Theme.FRUIT, Graphics.COLOR_TRANSPARENT);
         for (var i = 0; i < MAXE; i++) {
             if (eLive[i] == 0) { continue; }
-            var r = radiusAt(eDepth[i]);
-            var a0 = eSeg[i] * STEP;
-            var a1 = a0 + STEP;
-            var x0 = ox + px(a0, r);
-            var y0 = oy + py(a0, r);
-            var x1 = ox + px(a1, r);
-            var y1 = oy + py(a1, r);
-            var mid = radiusAt(eDepth[i]) + 7;
-            var xm = ox + px(a0 + STEP / 2, mid);
-            var ym = oy + py(a0 + STEP / 2, mid);
+            var d = eDepth[i];
+            var s = eSeg[i];
+            var j = nextV(s);
+            var x0 = ox + vx(s, d);
+            var y0 = oy + vy(s, d);
+            var x1 = ox + vx(j, d);
+            var y1 = oy + vy(j, d);
+            var dd = (d + 26 > DEEP) ? DEEP : d + 26;
+            var xm = ox + midX(s, dd);
+            var ym = oy + midY(s, dd);
             dc.drawLine(x0, y0, xm, ym);
             dc.drawLine(x1, y1, xm, ym);
             dc.drawLine(x0, y0, x1, y1);
@@ -261,24 +308,21 @@ module Tempest {
         dc.setColor(Theme.TEXT, Graphics.COLOR_TRANSPARENT);
         for (var i = 0; i < MAXB; i++) {
             if (bLive[i] == 0) { continue; }
-            var r = radiusAt(bDepth[i]);
-            var a = bSeg[i] * STEP + STEP / 2;
-            dc.fillRectangle(ox + px(a, r) - 1, oy + py(a, r) - 1, 3, 3);
+            dc.fillRectangle(ox + midX(bSeg[i], bDepth[i]) - 1,
+                             oy + midY(bSeg[i], bDepth[i]) - 1, 3, 3);
         }
 
         if (state == DYING) { return; }
-        // The blaster: a claw sitting astride its segment on the rim.
+        // The blaster: a claw astride its segment on the rim.
         dc.setColor(Theme.PACMAN, Graphics.COLOR_TRANSPARENT);
-        var a0 = playerSeg * STEP;
-        var a1 = a0 + STEP;
-        var am = a0 + STEP / 2;
-        var inR = outerR - 14;
-        var x0 = ox + px(a0, outerR);
-        var y0 = oy + py(a0, outerR);
-        var x1 = ox + px(a1, outerR);
-        var y1 = oy + py(a1, outerR);
-        var xm = ox + px(am, inR);
-        var ym = oy + py(am, inR);
+        var s = playerSeg;
+        var j = nextV(s);
+        var x0 = ox + vx(s, DEEP);
+        var y0 = oy + vy(s, DEEP);
+        var x1 = ox + vx(j, DEEP);
+        var y1 = oy + vy(j, DEEP);
+        var xm = ox + midX(s, DEEP - 34);
+        var ym = oy + midY(s, DEEP - 34);
         dc.drawLine(x0, y0, xm, ym);
         dc.drawLine(x1, y1, xm, ym);
         dc.drawLine(x0, y0, x1, y1);

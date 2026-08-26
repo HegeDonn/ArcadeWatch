@@ -35,54 +35,151 @@ module Shell {
     function hideInfo() as Void { infoTimer = 0; }
     function showingInfo() as Boolean { return infoTimer > 0; }
 
-    // ---- the swipe animation ----------------------------------------------
-    // Sideways recolours, up/down changes game. Either way the whole screen
-    // slides: the outgoing state leaves and the incoming one follows it in.
+    // ---- the drag ----------------------------------------------------------
+    //
+    // The screen follows your finger. A drag is not a gesture that triggers an
+    // animation afterwards -- the offset below IS the finger, live, and on
+    // release it either carries through to the next screen or springs back to
+    // this one. Sideways changes colour, up and down changes game.
+    //
     // The simulation freezes for the duration so both halves show one instant.
-    const SLIDE_FRAMES = 10;
+    const SETTLE_FRAMES = 6;
+    const TAKE_FRACTION = 4;          // drag a quarter of the way to commit
+    const AXIS_SLOP = 8;              // px before we decide which way you meant
+
     const CHANGE_COLOUR = 0;
     const CHANGE_GAME = 1;
 
-    var slideStep as Number = 0;
-    var slideDir as Number = 0;       // +1 new content enters from right/bottom
-    var slideAxis as Number = 0;      // 0 horizontal, 1 vertical
-    var slideArmed as Boolean = false;
-    var pendingChange as Number = -1;
-    var pendingDelta as Number = 0;
+    var axis as Number = -1;          // -1 undecided, 0 horizontal, 1 vertical
+    var offset as Number = 0;         // px the current screen has moved
+    var dragging as Boolean = false;
+    var settling as Number = 0;
+    var settleFrom as Number = 0;
+    var settleTo as Number = 0;
+    var committing as Boolean = false;
 
-    function startSlide(axis as Number, dir as Number,
-                        kind as Number, delta as Number) as Void {
-        if (slideStep > 0) { return; }        // already mid-swipe
-        slideAxis = axis;
-        slideDir = dir;
-        pendingChange = kind;
-        pendingDelta = delta;
-        slideStep = SLIDE_FRAMES;
-        slideArmed = true;
+    var _startX as Number = 0;
+    var _startY as Number = 0;
+    var _lastDrag as Number = -100000;
+
+    function span() as Number {
+        return (axis == 1) ? Layout.screenH : Layout.screenW;
     }
 
-    // Applied by the view, between drawing the outgoing screen and the
-    // incoming one -- so the change happens *inside* the animation.
-    function applyPending() as Void {
-        if (pendingChange == CHANGE_COLOUR) {
-            Theme.cycleWall();
-        } else if (pendingChange == CHANGE_GAME) {
-            game = (game + pendingDelta + COUNT) % COUNT;
+    // Which way the incoming screen lies: dragging content left (negative
+    // offset) brings the next one in from the right.
+    function delta() as Number { return (offset < 0) ? 1 : -1; }
+
+    function sliding() as Boolean {
+        return dragging || settling > 0 || offset != 0;
+    }
+
+    function dragStart(x as Number, y as Number) as Void {
+        if (settling > 0) { return; }
+        dragging = true;
+        axis = -1;
+        offset = 0;
+        _startX = x;
+        _startY = y;
+        _lastDrag = System.getTimer();
+    }
+
+    function dragMove(x as Number, y as Number) as Void {
+        if (!dragging) { return; }
+        _lastDrag = System.getTimer();
+        var dx = x - _startX;
+        var dy = y - _startY;
+        if (axis < 0) {
+            if (dx.abs() < AXIS_SLOP && dy.abs() < AXIS_SLOP) { return; }
+            axis = (dx.abs() >= dy.abs()) ? 0 : 1;
+        }
+        var d = (axis == 0) ? dx : dy;
+        var lim = span();
+        if (d > lim) { d = lim; }
+        if (d < -lim) { d = -lim; }
+        offset = d;
+    }
+
+    function dragEnd() as Void {
+        if (!dragging) { return; }
+        dragging = false;
+        _lastDrag = System.getTimer();
+        if (axis < 0 || offset == 0) { offset = 0; axis = -1; return; }
+        settleFrom = offset;
+        committing = offset.abs() * TAKE_FRACTION >= span();
+        settleTo = committing ? ((offset < 0) ? -span() : span()) : 0;
+        settling = SETTLE_FRAMES;
+    }
+
+    // A swipe that arrives as a gesture or a behaviour, on a device or in a
+    // state where the drag events did not. Ignored if a drag just handled it.
+    function flick(ax as Number, dir as Number) as Void {
+        if (sliding() || System.getTimer() - _lastDrag < 400) { return; }
+        axis = ax;
+        settleFrom = 0;
+        offset = (dir > 0) ? -1 : 1;
+        committing = true;
+        settleTo = (dir > 0) ? -span() : span();
+        settling = SETTLE_FRAMES + 4;
+    }
+
+    function tickSlide() as Void {
+        if (settling <= 0) { return; }
+        settling--;
+        var t = SETTLE_FRAMES - settling;
+        if (t > SETTLE_FRAMES) { t = SETTLE_FRAMES; }
+        offset = settleFrom + ((settleTo - settleFrom) * t) / SETTLE_FRAMES;
+        if (settling > 0) { return; }
+        if (committing) { applyChange(); }
+        offset = 0;
+        axis = -1;
+        committing = false;
+    }
+
+    function applyChange() as Void {
+        var d = (settleTo < 0) ? 1 : -1;
+        if (axis == 0) {
+            Theme.cycleWall(d);
+        } else {
+            switchTo((game + d + COUNT) % COUNT);
+        }
+    }
+
+    // Games keep their state, so flicking between them resumes rather than
+    // restarts. Only a game that has never been shown gets initialised.
+    var started = [false, false, false, false, false] as Array<Boolean>;
+
+    // Every game is initialised at boot, not on first visit. A drag shows the
+    // neighbouring game live under your finger, so any of them can be drawn at
+    // any moment -- and drawing one that had never been reset walked straight
+    // into its empty arrays.
+    function initAll() as Void {
+        var keep = game;
+        for (var i = 0; i < COUNT; i++) {
+            if (started[i]) { continue; }
+            game = i;
             reset();
         }
-        pendingChange = -1;
+        game = keep;
     }
 
-    // 0..100, eased out so it leaves fast and settles gently.
-    function slideProgress() as Number {
-        var t = SLIDE_FRAMES - slideStep;
-        var p = (t * 100) / SLIDE_FRAMES;
-        var inv = 100 - p;
-        return 100 - (inv * inv) / 100;
+    function switchTo(idx as Number) as Void {
+        game = idx;
+        if (!started[idx]) {
+            started[idx] = true;
+            reset();
+        }
+    }
+
+    // What the incoming half of a drag shows.
+    function incomingGame() as Number {
+        if (axis != 1) { return game; }
+        return (game + delta() + COUNT) % COUNT;
     }
 
     // ---- dispatch ----------------------------------------------------------
     function reset() as Void {
+        started[game] = true;
         if (game == PACMAN) { PacGame.newGame(); }
         else if (game == INVADERS) { Invaders.reset(); }
         else if (game == BRICKS) { Bricks.reset(); }
@@ -96,9 +193,10 @@ module Shell {
             infoTimer--;
             Sensors.poll(frame);
         }
-        if (slideStep > 0) {
-            slideStep--;
-            return;                            // frozen while the screen moves
+        if (dragging) { return; }              // frozen under your finger
+        if (settling > 0) {
+            tickSlide();
+            return;
         }
         if (game == PACMAN) { PacGame.update(); }
         else if (game == INVADERS) { Invaders.update(); }

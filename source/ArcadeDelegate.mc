@@ -34,14 +34,32 @@ class ArcadeDelegate extends WatchUi.BehaviorDelegate {
     // re-entry while a slide is running, so it does not matter if a gesture
     // arrives twice (once as a swipe, once as a behaviour) -- the second call
     // is a no-op.
+    // The screen follows your finger; these are only the fallback for a
+    // gesture that arrived as a swipe or a behaviour instead of as drag
+    // events. Shell.flick ignores them if a drag just handled the same
+    // movement, so nothing acts twice.
     private function recolour(dir as Number) as Boolean {
-        Shell.startSlide(0, dir, Shell.CHANGE_COLOUR, 0);
+        Shell.flick(0, dir);
         WatchUi.requestUpdate();
         return true;
     }
 
     private function switchGame(dir as Number) as Boolean {
-        Shell.startSlide(1, dir, Shell.CHANGE_GAME, dir);
+        Shell.flick(1, dir);
+        WatchUi.requestUpdate();
+        return true;
+    }
+
+    function onDrag(evt as WatchUi.DragEvent) as Boolean {
+        var c = evt.getCoordinates();
+        var t = evt.getType();
+        if (t == WatchUi.DRAG_TYPE_START) {
+            Shell.dragStart(c[0], c[1]);
+        } else if (t == WatchUi.DRAG_TYPE_CONTINUE) {
+            Shell.dragMove(c[0], c[1]);
+        } else {
+            Shell.dragEnd();
+        }
         WatchUi.requestUpdate();
         return true;
     }
