@@ -57,6 +57,7 @@ module Rocks {
     var shipVY as Number = 0;
     var shipAng as Number = 0;
     var fireLock as Number = 0;
+    var thrusting as Boolean = false;
 
     var cx as Number = 195;
     var cy as Number = 195;
@@ -105,6 +106,7 @@ module Rocks {
         shipVX = 0;
         shipVY = 0;
         shipAng = 0;
+        thrusting = false;
         for (var i = 0; i < MAXSHOT; i++) { slife[i] = 0; }
     }
 
@@ -229,21 +231,28 @@ module Rocks {
             else if (diff < -1) { shipAng = (shipAng - 2 + TURN) % TURN; }
 
             if (diff.abs() <= 2 && fireLock <= 0) { fire(); }
-            // Back off when something big is close.
-            if (bestD < 70 * 70) {
-                shipVX -= (cos(shipAng) * 3) / 256;
-                shipVY -= (sin(shipAng) * 3) / 256;
-            } else if (bestD > 130 * 130) {
-                shipVX += (cos(shipAng) * 2) / 256;
-                shipVY += (sin(shipAng) * 2) / 256;
+
+            // Fly, rather than hover. It used to coast only at two specific
+            // ranges and drag did the rest, so it mostly sat still and turned
+            // on the spot. Now it is under thrust nearly all the time: retro
+            // when something is close enough to hit, forward otherwise.
+            thrusting = true;
+            if (bestD < 80 * 80) {
+                shipVX -= (cos(shipAng) * 7) / 256;
+                shipVY -= (sin(shipAng) * 7) / 256;
+            } else {
+                shipVX += (cos(shipAng) * 6) / 256;
+                shipVY += (sin(shipAng) * 6) / 256;
             }
+        } else {
+            thrusting = false;
         }
         if (fireLock > 0) { fireLock--; }
 
         // drag, so it never runs away with itself
         shipVX = (shipVX * 15) / 16;
         shipVY = (shipVY * 15) / 16;
-        var lim = 40;
+        var lim = 96;              // ~6 px/frame
         if (shipVX > lim) { shipVX = lim; }
         if (shipVX < -lim) { shipVX = -lim; }
         if (shipVY > lim) { shipVY = lim; }
@@ -328,7 +337,12 @@ module Rocks {
     }
 
     // A rock silhouette: eight radii, lumpy but closed.
-    const LUMP = [10, 8, 10, 7, 10, 8, 9, 7] as Array<Number>;
+    //
+    // The radii must not alternate long-short-long-short. They did, and every
+    // other vertex pulled in far enough that the octagon read as a
+    // quadrilateral. These wander instead, so it looks chipped rather than
+    // geometric.
+    const LUMP = [10, 9, 10, 8, 9, 10, 8, 9] as Array<Number>;
 
     function draw(dc as Dc, ox as Number, oy as Number, colour as Number) as Void {
         if (!laidOut) { layout(); }
@@ -371,10 +385,21 @@ module Rocks {
         var ay = hy + (sin(shipAng) * nose) / 256;
         var b = (shipAng + 26) % TURN;
         var c = (shipAng + TURN - 26) % TURN;
-        dc.fillPolygon([
-            [ax, ay],
-            [hx + (cos(b) * tail) / 256, hy + (sin(b) * tail) / 256],
-            [hx + (cos(c) * tail) / 256, hy + (sin(c) * tail) / 256]
-        ]);
+        var bxp = hx + (cos(b) * tail) / 256;
+        var byp = hy + (sin(b) * tail) / 256;
+        var cxp = hx + (cos(c) * tail) / 256;
+        var cyp = hy + (sin(c) * tail) / 256;
+        dc.fillPolygon([[ax, ay], [bxp, byp], [cxp, cyp]]);
+
+        if (thrusting && (Shell.frame % 4) < 2) {
+            var back = (shipAng + TURN / 2) % TURN;
+            dc.setColor(Theme.FRUIT, Graphics.COLOR_TRANSPARENT);
+            dc.fillPolygon([
+                [(bxp + cxp) / 2, (byp + cyp) / 2],
+                [bxp, byp],
+                [hx + (cos(back) * (tail + 6)) / 256,
+                 hy + (sin(back) * (tail + 6)) / 256]
+            ]);
+        }
     }
 }
