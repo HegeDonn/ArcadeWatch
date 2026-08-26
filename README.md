@@ -1,12 +1,26 @@
 # Arcade Watch
 
-A self-playing maze-chase for the Garmin **vívoactive 5**, where the clock
-*is* the game furniture: the time sits where the arcade puts the score, and
-every time the hero dies or a round begins, the arcade's `READY!` is replaced
-by the time and date in big pixel type.
+**Four** self-playing arcade games for the Garmin **vívoactive 5**, where the
+clock *is* the game furniture: the time sits where the arcade puts the score,
+and every time a life is lost or a round begins, the arcade's `READY!` is
+replaced by the time and date in big pixel type.
 
-Nobody plays it. The hero and the four ghosts run themselves, forever — the
-watch is permanently in *attract mode*.
+Nobody plays any of them. They run themselves, forever — the watch is
+permanently in *attract mode*.
+
+| swipe up / down | change game |
+|---|---|
+| swipe left / right | recolour |
+| tap | peek at heart rate and Body Battery for 5 s |
+| BACK | exit |
+
+**The games.** A maze chase with the authentic 28×31 playfield and the real
+1980 ghost targeting; **Space Invaders**, whose formation speeds up as it
+thins out exactly because the original ran out of sprites to move; **Breakout**,
+whose wall is fitted to the circle so each row is only as wide as the bezel
+allows; and **Asteroids**, which wraps *radially* — leave the bezel anywhere
+and you re-enter diametrically opposite, which suits a round screen far better
+than the cabinet's rectangular wrap.
 
 > A homage to the 1980 arcade classic, built for fun on a personal
 > smartwatch. Not affiliated with, endorsed by, or connected to Bandai Namco
@@ -46,6 +60,7 @@ Regenerating the baked assets (only needed if you edit the maze or the font):
 python3 tools/gen_maze_mc.py    # tools/maze.py    -> source/MazeData.mc
 python3 tools/gen_icons_mc.py   # tools/icons.py   -> source/IconData.mc
 python3 tools/gen_sprites_mc.py # tools/sprites.py -> source/SpriteData.mc
+python3 tools/gen_invaders_mc.py # tools/invaders.py -> source/InvaderData.mc
 python3 tools/gen_fonts.py      # tools/pixfont.py -> resources/fonts/*
 python3 tools/gen_icon.py       # launcher icon
 ```
@@ -89,9 +104,9 @@ during READY a tap still skips the dwell as before.
 
 ![peek](tools/peek.png)
 
-**Swipe** any direction to recolour the maze — the whole screen slides off and
-the new colour slides in behind it. Six colours, and the choice survives
-closing the app. **Tap** skips the clock dwell. **BACK** exits.
+**Swipe sideways** to recolour and **up or down** to change game — either way
+the whole screen slides off and the new one follows it in. Six colours, and
+the choice survives closing the app. **Tap** skips the clock dwell.
 
 ![swipe](tools/swipe_slide.png)
 
@@ -224,8 +239,10 @@ there is a separate one on execution time. Both bit during development:
 | AI flood, first version | tripped the watchdog outright |
 | …after junction-only + capped radius | median **5 ms**, worst **9 ms** of a 66 ms frame, on ~6% of frames |
 | Sensor icons | 15 + 16 runs, drawn live but only during a 5 s peek |
+| Invader formation | 55 sprites x 9 runs = ~495 calls; the reason they are 6x5 and not 11x8 |
+| Breakout / Asteroids | ~42 and ~80 calls |
 | Swipe slide | two buffers, whole scene drawn twice for 10 frames |
-| Memory | 62 KB of 768 KB with both buffers, flat over a 90 s run |
+| Memory | 97 KB of 768 KB with all four games and both buffers |
 | `.prg` | 150 KB |
 
 ## Seeing it without a watch
@@ -261,7 +278,10 @@ tap-to-peek were checked.
 ## Layout
 
 ```
-source/    MazeData.mc   generated: 28-bit-per-row masks + merged wall runs
+source/    Shell.mc      which game is showing, the swipe, the sensor peek
+           PacGame.mc    the maze chase   Invaders.mc  Bricks.mc  Rocks.mc
+           InvaderData.mc generated: the invader sprites as run lists
+           MazeData.mc   generated: 28-bit-per-row masks + merged wall runs
            IconData.mc   generated: the two sensor icons as run lists
            Sensors.mc    heart rate + Body Battery, cached as strings
            Maze.mc       runtime dot state, tile queries
@@ -273,9 +293,10 @@ source/    MazeData.mc   generated: 28-bit-per-row masks + merged wall runs
            Game.mc       state machine     Clock.mc  time + date
            PacView.mc    rendering         PacApp.mc / PacDelegate.mc
 tools/     maze.py pixfont.py icons.py     hand-edited sources of truth
-           sprites.py                      Pac-Man's art, also hand-editable
+           sprites.py invaders.py          more hand-editable art
            gen_maze_mc.py gen_icons_mc.py  bake those into source/*Data.mc
            gen_sprites_mc.py               rotates + bakes the sprites
+           gen_invaders_mc.py              bakes the invader sprites
            gen_fonts.py gen_icon.py        bake them into resources/
            gen_icon_art.py                 proposes an icon shape from geometry
            render.py replay.py             offline mirror + trace replay
@@ -332,6 +353,16 @@ Things that cost real time — don't rediscover them.
   8 px diameter, so a sprite built from a circle plus a wedge came out 9 wide
   by 8 tall with the back tapered to a 3 px point. At sprite sizes the
   rasteriser makes the decisions; explicit pixel art takes them back.
+- **A radial wrap has to re-enter *on* the rim.** Mirroring a position through
+  the centre keeps the same distance, so anything outside the bezel stayed
+  outside and wrapped again next frame — asteroids flickered between two
+  places every frame until the re-entry point was pushed onto the rim.
+- **Clamping to a wall and negating velocity sticks.** Putting the ball
+  exactly on the rail means the same test passes next step and flips it
+  straight back, for ever. Force the sign and nudge clear instead.
+- **Initialise whichever game is showing, not a specific one.** The view used
+  to call Pac-Man's `newGame()` on layout; booting into any other game left it
+  with untouched arrays — no bricks, ball at (0, 0).
 - **Sideloaded apps never show `settings.xml`** in Garmin Connect Mobile.
 - **No `getVectorFont` / `drawAngledText`** on the vívoactive 5.
 

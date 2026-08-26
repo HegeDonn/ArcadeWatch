@@ -82,7 +82,7 @@ class Ghost extends Actor {
         if (state == GhostState.EYES) { return [GATE_C, GATE_R]; }
         if (mode == GhostMode.SCATTER) { return [CORNER_C[who], CORNER_R[who]]; }
 
-        var pac = Game.pac;
+        var pac = PacGame.pac;
         var pc = pac.tx;
         var pr = pac.ty;
         var pd = pac.dir;
@@ -100,7 +100,7 @@ class Ghost extends Actor {
             var c = pc + Maze.DX[pd] * 2;
             var r = pr + Maze.DY[pd] * 2;
             if (pd == Maze.UP) { c -= 2; }
-            var b = Game.ghosts[0];
+            var b = PacGame.ghosts[0];
             return [2 * c - b.tx, 2 * r - b.ty];
         }
         // Clyde: bold at range, shy up close
@@ -121,7 +121,7 @@ class Ghost extends Actor {
         if (state == GhostState.ENTER) {
             if (ty < HOME_R[who]) { dir = Maze.DOWN; return; }
             state = GhostState.EXIT;                             // revived: straight back out
-            mode = Game.modeNow();
+            mode = PacGame.modeNow();
             dir = Maze.UP;
             return;
         }

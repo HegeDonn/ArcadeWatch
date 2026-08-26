@@ -48,7 +48,7 @@ class Pac extends Actor {
     function pressedFromAhead() as Boolean {
         var fx = Maze.DX[dir];
         var fy = Maze.DY[dir];
-        var g = Game.ghosts;
+        var g = PacGame.ghosts;
         for (var i = 0; i < 4; i++) {
             if (!g[i].isDangerous()) { continue; }
             var dx = g[i].tx - tx;
@@ -83,7 +83,7 @@ class Pac extends Actor {
             Nav.flood(tx, ty, MazeData.BLOCK_P, Nav.dist, Nav.firstDir, true, FOOD_R);
         }
 
-        var g = Game.ghosts;
+        var g = PacGame.ghosts;
         var threat = 9999;
         var threatC = -1;
         var threatR = -1;

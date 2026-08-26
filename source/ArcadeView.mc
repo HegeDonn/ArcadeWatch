@@ -3,7 +3,7 @@ import Toybox.Lang;
 import Toybox.System;
 import Toybox.WatchUi;
 
-class PacView extends WatchUi.View {
+class ArcadeView extends WatchUi.View {
 
     // Walls + dots are static between bites, so they live in an offscreen
     // buffer and each frame is one blit plus the five sprites. Painting
@@ -17,6 +17,8 @@ class PacView extends WatchUi.View {
     private var _started as Boolean = false;
 
     // Draw offset, so an entire frame can be shifted for the swipe animation.
+    // The colour the outgoing half of a slide was drawn in.
+    private var _slideFrom as Number = Theme.WALLS[0];
     private var _ox as Number = 0;
     private var _oy as Number = 0;
 
@@ -32,7 +34,9 @@ class PacView extends WatchUi.View {
         makeBuffer(dc.getWidth(), dc.getHeight());
         if (!_started) {
             _started = true;
-            Game.newGame();
+            // Whichever game is showing, not Pac-Man specifically -- booting
+            // straight into another one otherwise left it never initialised.
+            Shell.reset();
         }
     }
 
@@ -51,7 +55,7 @@ class PacView extends WatchUi.View {
             _buf = null;      // fall back to painting the maze live
             _bufNext = null;
         }
-        if (Game.TRACE) {
+        if (Shell.TRACE) {
             System.println("BUF|" + ((_buf != null) ? "buffered" : "LIVE-FALLBACK")
                 + "|free=" + System.getSystemStats().freeMemory
                 + "|used=" + System.getSystemStats().usedMemory);
@@ -187,10 +191,10 @@ class PacView extends WatchUi.View {
     // as an 8 px diameter, so the body came out 9 wide by 8 tall and the back
     // tapered to a 3 px point -- visibly chopped on the watch.
     private function drawPac(dc as Dc) as Void {
-        var p = Game.pac;
+        var p = PacGame.pac;
         var idx;
-        if (Game.state == Game.DYING) {
-            var f = (p.deathFrame * SpriteData.DEATH_COUNT) / Game.DEATH_FRAMES;
+        if (PacGame.state == PacGame.DYING) {
+            var f = (p.deathFrame * SpriteData.DEATH_COUNT) / PacGame.DEATH_FRAMES;
             if (f >= SpriteData.DEATH_COUNT) { return; }   // gone
             idx = SpriteData.DEATH_FIRST + f;
         } else {
@@ -230,7 +234,7 @@ class PacView extends WatchUi.View {
         if (!eyes) {
             var body = Theme.GHOST[g.who];
             if (g.mode == GhostMode.FRIGHT) {
-                body = Game.frightFlashing() ? Theme.FRIGHT_END : Theme.FRIGHT;
+                body = PacGame.frightFlashing() ? Theme.FRIGHT_END : Theme.FRIGHT;
             }
             dc.setColor(body, Graphics.COLOR_TRANSPARENT);
             dc.fillCircle(px, py - 1, r);
@@ -262,7 +266,7 @@ class PacView extends WatchUi.View {
     }
 
     private function drawPellets(dc as Dc) as Void {
-        if ((Game.frame / 5) % 2 != 0) { return; }
+        if ((Shell.frame / 5) % 2 != 0) { return; }
         dc.setColor(Theme.DOT, Graphics.COLOR_TRANSPARENT);
         for (var r = 0; r < MazeData.ROWS; r++) {
             var m = Maze.power[r];
@@ -317,14 +321,14 @@ class PacView extends WatchUi.View {
         var r = (Layout.cell * 11) / 20;
 
         dc.setColor(Theme.PACMAN, Graphics.COLOR_TRANSPARENT);
-        var n = Game.lives - 1;
+        var n = Shell.lives() - 1;
         if (n > 3) { n = 3; }
         for (var i = 0; i < n; i++) {
             dc.fillCircle(w / 2 - 34 + i * (r * 2 + 4), y + r, r);
         }
 
         // level, shown the arcade way: one fruit per level, capped
-        var lv = Game.level;
+        var lv = Shell.level();
         if (lv > 4) { lv = 4; }
         for (var i = 0; i < lv; i++) {
             var fx = w / 2 + 16 + i * (r * 2 + 3);
@@ -342,7 +346,7 @@ class PacView extends WatchUi.View {
         var small = WatchUi.loadResource(Rez.Fonts.FontSmall) as FontResource;
         var t = Clock.timeStr();
         var d = Clock.dateStr();
-        var over = (Game.state == Game.GAME_OVER);
+        var over = (PacGame.state == PacGame.GAME_OVER);
 
         var th = dc.getFontHeight(big);
         var sh = dc.getFontHeight(small);
@@ -380,67 +384,84 @@ class PacView extends WatchUi.View {
     // One complete frame, drawn at an arbitrary offset. The swipe animation
     // simply calls this twice: the outgoing screen on its way out and the
     // incoming one right behind it.
+    // Pac-Man's maze is cached in a buffer; the other games are cheap enough
+    // to draw outright, and are handed the offset so they slide with everything
+    // else.
+    private function drawPlayfield(dc as Dc, flashing as Boolean,
+                                   colour as Number) as Void {
+        if (Shell.game == Shell.PACMAN) {
+            if (flashing) { return; }
+            drawPellets(dc);
+            if (PacGame.state != PacGame.DYING) {
+                for (var i = 0; i < 4; i++) { drawGhost(dc, PacGame.ghosts[i]); }
+            }
+            if (PacGame.state != PacGame.GAME_OVER) { drawPac(dc); }
+        } else if (Shell.game == Shell.INVADERS) {
+            Invaders.draw(dc, _ox, _oy, colour);
+        } else if (Shell.game == Shell.BRICKS) {
+            Bricks.draw(dc, _ox, _oy, colour);
+        } else {
+            Rocks.draw(dc, _ox, _oy, colour);
+        }
+    }
+
     private function drawScene(dc as Dc, buf as Graphics.BufferedBitmap?,
                                ox as Number, oy as Number,
-                               flashing as Boolean) as Void {
+                               flashing as Boolean, colour as Number) as Void {
         _ox = ox;
         _oy = oy;
-        if (buf != null) {
-            dc.drawBitmap(ox, oy, buf);
-        } else {
-            paintMaze(dc, _flashOn ? Theme.WALL_FLASH : Theme.wall(), true);
-        }
-        if (!flashing) {
-            drawPellets(dc);
-            if (Game.state != Game.DYING) {
-                for (var i = 0; i < 4; i++) { drawGhost(dc, Game.ghosts[i]); }
+        if (Shell.game == Shell.PACMAN) {
+            if (buf != null) {
+                dc.drawBitmap(ox, oy, buf);
+            } else {
+                paintMaze(dc, _flashOn ? Theme.WALL_FLASH : colour, true);
             }
-            if (Game.state != Game.GAME_OVER) { drawPac(dc); }
         }
+        drawPlayfield(dc, flashing, colour);
         drawScoreTime(dc);
         drawStatus(dc);
-        var peek = Game.showingInfo();
+        var peek = Shell.showingInfo();
         if (peek) { drawSensors(dc); }
-        if (Game.showingClock() || peek) { drawClockPanel(dc); }
+        if (Shell.showingClock() || peek) { drawClockPanel(dc); }
         _ox = 0;
         _oy = 0;
     }
 
     function onUpdate(dc as Dc) as Void {
-        var flashing = (Game.state == Game.LEVEL_DONE);
+        var flashing = (Shell.game == Shell.PACMAN
+                        && PacGame.state == PacGame.LEVEL_DONE);
         var w = dc.getWidth();
         var h = dc.getHeight();
 
-        // A swipe has just landed: paint the incoming colour into the spare
-        // buffer once, then leave both alone for the rest of the animation.
-        if (Game.slideArmed) {
-            Game.slideArmed = false;
-            if (_bufNext != null) {
-                paintMaze((_bufNext as Graphics.BufferedBitmap).getDc(),
-                          Theme.wall(), true);
-            } else {
-                Game.slideStep = 0;      // no spare buffer: snap instead
-                Game.mazeDirty = true;
+        // A swipe has just landed. Remember the colour the outgoing half must
+        // be drawn in; the change itself is applied mid-animation, below.
+        if (Shell.slideArmed) {
+            Shell.slideArmed = false;
+            _slideFrom = Theme.wall();
+            if (_bufNext == null && Shell.game == Shell.PACMAN) {
+                Shell.slideStep = 0;          // no spare buffer: snap instead
+                Shell.applyPending();
+                PacGame.mazeDirty = true;
             }
         }
 
-        var sliding = (Game.slideStep > 0 && _bufNext != null);
+        var sliding = (Shell.slideStep > 0);
 
-        if (!sliding) {
+        if (!sliding && Shell.game == Shell.PACMAN) {
             if (flashing) {
-                var on = ((Game.timer / 4) % 2) == 0;
-                if (on != _flashOn || Game.mazeDirty) {
+                var on = ((PacGame.timer / 4) % 2) == 0;
+                if (on != _flashOn || PacGame.mazeDirty) {
                     _flashOn = on;
-                    Game.mazeDirty = false;
+                    PacGame.mazeDirty = false;
                     rebuild(on ? Theme.WALL_FLASH : Theme.wall());
                 }
-            } else if (Game.mazeDirty) {
-                Game.mazeDirty = false;
+            } else if (PacGame.mazeDirty) {
+                PacGame.mazeDirty = false;
                 _flashOn = false;
                 rebuild(Theme.wall());
-            } else if (Game.lastEatC >= 0) {
-                punch(Game.lastEatC, Game.lastEatR);
-                Game.lastEatC = -1;
+            } else if (PacGame.lastEatC >= 0) {
+                punch(PacGame.lastEatC, PacGame.lastEatR);
+                PacGame.lastEatC = -1;
             }
         }
 
@@ -448,25 +469,37 @@ class PacView extends WatchUi.View {
         dc.clear();
 
         if (sliding) {
-            var e = Game.slideProgress();
-            var d = Game.slideDir;
-            var span = (Game.slideAxis == 0) ? w : h;
+            var e = Shell.slideProgress();
+            var d = Shell.slideDir;
+            var span = (Shell.slideAxis == 0) ? w : h;
             var shift = -d * (e * span) / 100;
-            var ox = (Game.slideAxis == 0) ? shift : 0;
-            var oy = (Game.slideAxis == 0) ? 0 : shift;
-            var nx = (Game.slideAxis == 0) ? ox + d * w : 0;
-            var ny = (Game.slideAxis == 0) ? 0 : oy + d * h;
-            drawScene(dc, _buf, ox, oy, flashing);
-            drawScene(dc, _bufNext, nx, ny, flashing);
-            if (Game.slideStep <= 1) {
-                // Animation done: the incoming buffer becomes the live one.
+            var ox = (Shell.slideAxis == 0) ? shift : 0;
+            var oy = (Shell.slideAxis == 0) ? 0 : shift;
+            var nx = (Shell.slideAxis == 0) ? ox + d * w : 0;
+            var ny = (Shell.slideAxis == 0) ? 0 : oy + d * h;
+
+            drawScene(dc, _buf, ox, oy, flashing, _slideFrom);
+
+            // The change lands *between* the two halves, so the outgoing
+            // screen is the old state and the incoming one is the new.
+            if (Shell.pendingChange >= 0) {
+                Shell.applyPending();
+                if (Shell.game == Shell.PACMAN && _bufNext != null) {
+                    paintMaze((_bufNext as Graphics.BufferedBitmap).getDc(),
+                              Theme.wall(), true);
+                }
+            }
+            drawScene(dc, _bufNext, nx, ny, false, Theme.wall());
+
+            if (Shell.slideStep <= 1) {
                 var t = _buf;
                 _buf = _bufNext;
                 _bufNext = t;
+                if (Shell.game == Shell.PACMAN) { PacGame.mazeDirty = false; }
             }
             return;
         }
 
-        drawScene(dc, _buf, 0, 0, flashing);
+        drawScene(dc, _buf, 0, 0, flashing, Theme.wall());
     }
 }

@@ -4,7 +4,7 @@ import Toybox.System;
 import Toybox.Timer;
 import Toybox.WatchUi;
 
-class PacApp extends Application.AppBase {
+class ArcadeApp extends Application.AppBase {
 
     private var _timer as Timer.Timer?;
 
@@ -21,13 +21,13 @@ class PacApp extends Application.AppBase {
     }
 
     function getInitialView() as [WatchUi.Views] or [WatchUi.Views, WatchUi.InputDelegates] {
-        var v = new PacView();
+        var v = new ArcadeView();
         // 15 fps. A watchface would be stuck at 1 -- this is the whole
         // reason Pac-Man is a watch-app.
         var t = new Timer.Timer();
-        t.start(method(:onTick), 1000 / Game.FPS, true);
+        t.start(method(:onTick), 1000 / Shell.FPS, true);
         _timer = t;
-        return [v, new PacDelegate()];
+        return [v, new ArcadeDelegate()];
     }
 
     // Registering a glance puts the app in the swipe-up carousel on the watch
@@ -41,9 +41,9 @@ class PacApp extends Application.AppBase {
     }
 
     function onTick() as Void {
-        Game.update();
+        Shell.update();
         // Trace before requestUpdate: the view consumes lastEat* when it draws.
-        if (Game.TRACE) { Game.trace(); }
+        if (Shell.TRACE) { Shell.trace(); }
         WatchUi.requestUpdate();
     }
 
@@ -53,6 +53,6 @@ class PacApp extends Application.AppBase {
     }
 }
 
-function getApp() as PacApp {
-    return Application.getApp() as PacApp;
+function getApp() as ArcadeApp {
+    return Application.getApp() as ArcadeApp;
 }

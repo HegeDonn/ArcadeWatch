@@ -75,6 +75,9 @@ module Layout {
     var livesY  as Number = 348;
 
     // Sensor icons, in the margin either side of the maze.
+    var screenW as Number = 390;
+    var screenH as Number = 390;
+
     var iconScale as Number = 4;
     var iconLX  as Number = 4;
     var iconRX  as Number = 325;
@@ -87,6 +90,8 @@ module Layout {
     // binding constraint is the maze's *diagonal*, not its width. Size the
     // cell from that and nothing ever falls off the bezel.
     function compute(w as Number, h as Number) as Void {
+        screenW = w;
+        screenH = h;
         var safe = (w < h ? w : h) / 2.0 - 2.0;
         var diag = Math.sqrt(
             (MazeData.COLS * MazeData.COLS + MazeData.ROWS * MazeData.ROWS).toFloat());
