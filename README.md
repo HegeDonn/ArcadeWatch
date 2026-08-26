@@ -51,7 +51,7 @@ tools/deploy.sh          # builds bin/ArcadeWatch-vivoactive5.prg and pushes it
 
 If the watch mounts as `/Volumes/GARMIN` it copies itself into `GARMIN/APPS/`.
 Otherwise drag `bin/ArcadeWatch-vivoactive5.prg` into `GARMIN/APPS/` with Android
-File Transfer. It appears in the **app list** (not the watchface list) — see
+File Transfer. It appears in the **app list** as **Arcade** (not the watchface list) — see
 "Why a watch-app" below.
 
 Regenerating the baked assets (only needed if you edit the maze or the font):

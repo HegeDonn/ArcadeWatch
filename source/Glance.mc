@@ -28,7 +28,7 @@ class ArcadeGlance extends WatchUi.GlanceView {
         // Literal, not Rez.Strings.AppName: a glance cannot reach Rez at all
         // ("Could not access symbol 'Rez'"), and the whole point of this view
         // is to depend on nothing.
-        var label = "PACMAN";
+        var label = "ARCADE";
         dc.drawText(2, h / 2, Graphics.FONT_TINY, label,
                     Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
 
