@@ -315,30 +315,14 @@ class ArcadeView extends WatchUi.View {
                     Clock.timeStr(), Graphics.TEXT_JUSTIFY_CENTER);
     }
 
-    // One spare life, drawn as whatever that game gives you another of: a
-    // Pac-Man, a cannon, a bat, a ship. It used to be a Pac-Man head in all
-    // four, which looked like a leftover in the other three.
-    private function drawLifeIcon(dc as Dc, cx as Number, cy as Number,
-                                  r as Number) as Void {
-        if (Shell.game == Shell.PACMAN) {
-            dc.setColor(Theme.PACMAN, Graphics.COLOR_TRANSPARENT);
-            drawSprite(dc, Maze.RIGHT * SpriteData.PHASES + 2, cx, cy,
-                       Theme.PACMAN);
-        } else if (Shell.game == Shell.INVADERS) {
-            dc.setColor(0x00C853, Graphics.COLOR_TRANSPARENT);
-            dc.fillRectangle(cx - r, cy + 1, r * 2 + 1, 3);
-            dc.fillRectangle(cx - 1, cy - 2, 3, 4);
-        } else if (Shell.game == Shell.BRICKS) {
-            dc.setColor(Theme.TEXT, Graphics.COLOR_TRANSPARENT);
-            dc.fillRectangle(cx - r, cy, r * 2 + 1, 3);
-        } else {
-            dc.setColor(Theme.PACMAN, Graphics.COLOR_TRANSPARENT);
-            dc.fillPolygon([[cx, cy - r], [cx - r + 1, cy + r - 1],
-                            [cx + r - 1, cy + r - 1]]);
-        }
-    }
-
+    // Spare lives and the level fruit, Pac-Man only.
+    //
+    // These are maze furniture. Shown under the other three they read as
+    // stray dots -- nobody expects a fruit count under Asteroids -- so the
+    // rest of the cabinet keeps a clean bottom edge.
     private function drawStatus(dc as Dc) as Void {
+        if (Shell.game != Shell.PACMAN) { return; }
+
         var w = dc.getWidth() + _ox * 2;
         var y = Layout.livesY + _oy;
         var r = (Layout.cell * 11) / 20;
@@ -346,23 +330,18 @@ class ArcadeView extends WatchUi.View {
         var n = Shell.lives() - 1;
         if (n > 3) { n = 3; }
         for (var i = 0; i < n; i++) {
-            drawLifeIcon(dc, w / 2 - 34 + i * (r * 2 + 4), y + r, r);
+            drawSprite(dc, Maze.RIGHT * SpriteData.PHASES + 2,
+                       w / 2 - 34 + i * (r * 2 + 4), y + r, Theme.PACMAN);
         }
 
-        // level: a fruit for the maze, a plain pip for everything else
         var lv = Shell.level();
         if (lv > 4) { lv = 4; }
         for (var i = 0; i < lv; i++) {
             var fx = w / 2 + 16 + i * (r * 2 + 3);
-            if (Shell.game == Shell.PACMAN) {
-                dc.setColor(Theme.FRUIT, Graphics.COLOR_TRANSPARENT);
-                dc.fillCircle(fx, y + r + 1, r - 1);
-                dc.setColor(0x00A000, Graphics.COLOR_TRANSPARENT);
-                dc.fillRectangle(fx - 1, y + r - 4, 2, 3);
-            } else {
-                dc.setColor(Theme.DOT, Graphics.COLOR_TRANSPARENT);
-                dc.fillRectangle(fx - 2, y + r - 1, 4, 4);
-            }
+            dc.setColor(Theme.FRUIT, Graphics.COLOR_TRANSPARENT);
+            dc.fillCircle(fx, y + r + 1, r - 1);
+            dc.setColor(0x00A000, Graphics.COLOR_TRANSPARENT);
+            dc.fillRectangle(fx - 1, y + r - 4, 2, 3);
         }
     }
 
