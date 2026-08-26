@@ -18,7 +18,8 @@ module Shell {
     const TRACE = false;
 
     const PACMAN = 0; const INVADERS = 1; const BRICKS = 2; const ROCKS = 3;
-    const COUNT = 4;
+    const TEMPEST = 4;
+    const COUNT = 5;
 
     var game as Number = PACMAN;
     var frame as Number = 0;
@@ -85,7 +86,8 @@ module Shell {
         if (game == PACMAN) { PacGame.newGame(); }
         else if (game == INVADERS) { Invaders.reset(); }
         else if (game == BRICKS) { Bricks.reset(); }
-        else { Rocks.reset(); }
+        else if (game == ROCKS) { Rocks.reset(); }
+        else { Tempest.reset(); }
     }
 
     function update() as Void {
@@ -101,7 +103,8 @@ module Shell {
         if (game == PACMAN) { PacGame.update(); }
         else if (game == INVADERS) { Invaders.update(); }
         else if (game == BRICKS) { Bricks.update(); }
-        else { Rocks.update(); }
+        else if (game == ROCKS) { Rocks.update(); }
+        else { Tempest.update(); }
     }
 
     // Is the big time-and-date panel up? Every game raises it between lives,
@@ -110,28 +113,32 @@ module Shell {
         if (game == PACMAN) { return PacGame.showingClock(); }
         if (game == INVADERS) { return Invaders.showingClock(); }
         if (game == BRICKS) { return Bricks.showingClock(); }
-        return Rocks.showingClock();
+        if (game == ROCKS) { return Rocks.showingClock(); }
+        return Tempest.showingClock();
     }
 
     function skipDwell() as Void {
         if (game == PACMAN) { PacGame.skipDwell(); }
         else if (game == INVADERS) { Invaders.skipDwell(); }
         else if (game == BRICKS) { Bricks.skipDwell(); }
-        else { Rocks.skipDwell(); }
+        else if (game == ROCKS) { Rocks.skipDwell(); }
+        else { Tempest.skipDwell(); }
     }
 
     function lives() as Number {
         if (game == PACMAN) { return PacGame.lives; }
         if (game == INVADERS) { return Invaders.lives; }
         if (game == BRICKS) { return Bricks.lives; }
-        return Rocks.lives;
+        if (game == ROCKS) { return Rocks.lives; }
+        return Tempest.lives;
     }
 
     function level() as Number {
         if (game == PACMAN) { return PacGame.level; }
         if (game == INVADERS) { return Invaders.level; }
         if (game == BRICKS) { return Bricks.level; }
-        return Rocks.level;
+        if (game == ROCKS) { return Rocks.level; }
+        return Tempest.level;
     }
 
     // Only Pac-Man streams a trace; the other games have not needed one.

@@ -406,8 +406,10 @@ class ArcadeView extends WatchUi.View {
             Invaders.draw(dc, _ox, _oy, colour);
         } else if (Shell.game == Shell.BRICKS) {
             Bricks.draw(dc, _ox, _oy, colour);
-        } else {
+        } else if (Shell.game == Shell.ROCKS) {
             Rocks.draw(dc, _ox, _oy, colour);
+        } else {
+            Tempest.draw(dc, _ox, _oy, colour);
         }
     }
 

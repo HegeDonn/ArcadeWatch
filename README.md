@@ -1,6 +1,6 @@
 # Arcade Watch
 
-**Four** self-playing arcade games for the Garmin **vívoactive 5**, where the
+**Five** self-playing arcade games for the Garmin **vívoactive 5**, where the
 clock *is* the game furniture: the time sits where the arcade puts the score,
 and every time a life is lost or a round begins, the arcade's `READY!` is
 replaced by the time and date in big pixel type.
@@ -18,9 +18,11 @@ permanently in *attract mode*.
 1980 ghost targeting; **Space Invaders**, whose formation speeds up as it
 thins out exactly because the original ran out of sprites to move; **Breakout**,
 whose wall is fitted to the circle so each row is only as wide as the bezel
-allows; and **Asteroids**, which wraps *radially* — leave the bezel anywhere
-and you re-enter diametrically opposite, which suits a round screen far better
-than the cabinet's rectangular wrap.
+allows; **Asteroids**, which wraps *radially* — leave the bezel anywhere and you
+re-enter diametrically opposite, which suits a round screen far better than
+the cabinet's rectangular wrap; and **Tempest**, the one game whose playfield
+genuinely *is* a circle, so for once the bezel is the edge of the play area
+and nothing has to be fitted or cropped at all.
 
 > A homage to the 1980 arcade classic, built for fun on a personal
 > smartwatch. Not affiliated with, endorsed by, or connected to Bandai Namco
@@ -240,9 +242,9 @@ there is a separate one on execution time. Both bit during development:
 | …after junction-only + capped radius | median **5 ms**, worst **9 ms** of a 66 ms frame, on ~6% of frames |
 | Sensor icons | 15 + 16 runs, drawn live but only during a 5 s peek |
 | Invader formation | 55 sprites x 9 runs = ~495 calls; the reason they are 6x5 and not 11x8 |
-| Breakout / Asteroids | ~42 and ~80 calls |
+| Breakout / Asteroids / Tempest | ~42, ~80 and ~90 calls |
 | Swipe slide | two buffers, whole scene drawn twice for 10 frames |
-| Memory | 97 KB of 768 KB with all four games and both buffers |
+| Memory | ~97 KB of 768 KB with all five games and both buffers |
 | `.prg` | 150 KB |
 
 ## Seeing it without a watch
@@ -279,7 +281,9 @@ tap-to-peek were checked.
 
 ```
 source/    Shell.mc      which game is showing, the swipe, the sensor peek
-           PacGame.mc    the maze chase   Invaders.mc  Bricks.mc  Rocks.mc
+           PacGame.mc    the maze chase
+           Invaders.mc Bricks.mc Rocks.mc Tempest.mc
+           Trig.mc       integer sin/cos on a 64-step circle
            InvaderData.mc generated: the invader sprites as run lists
            MazeData.mc   generated: 28-bit-per-row masks + merged wall runs
            IconData.mc   generated: the two sensor icons as run lists

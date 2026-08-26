@@ -24,10 +24,6 @@ module Rocks {
     const DIE_FRAMES   = 24;
     const OVER_FRAMES  = 5 * Shell.FPS;
 
-    // sin(i / 64 turn) * 256, first quarter; the rest is mirrored.
-    const SIN16 = [0, 25, 49, 74, 97, 120, 142, 162, 181, 198, 213, 226,
-                   237, 245, 251, 255, 256] as Array<Number>;
-
     const MAXROCK = 9;
     const MAXSHOT = 4;
 
@@ -72,15 +68,8 @@ module Rocks {
         laidOut = true;
     }
 
-    // sin/cos on 1/64 turn, scaled by 256.
-    function sin(a as Number) as Number {
-        a = ((a % TURN) + TURN) % TURN;
-        if (a <= 16) { return SIN16[a]; }
-        if (a <= 32) { return SIN16[32 - a]; }
-        if (a <= 48) { return -SIN16[a - 32]; }
-        return -SIN16[64 - a];
-    }
-    function cos(a as Number) as Number { return sin(a + 16); }
+    function sin(a as Number) as Number { return Trig.sin(a); }
+    function cos(a as Number) as Number { return Trig.cos(a); }
 
     function reset() as Void {
         if (!laidOut) { layout(); }
