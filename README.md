@@ -121,9 +121,17 @@ choice survives closing the app. **Tap** skips the clock dwell.
 |---|---|
 | nudge, finger still | springs back |
 | deliberate drag, no speed | one step past a quarter of the way |
-| flick | one step, settling in ~1.5 s |
-| firm swipe | two steps |
-| hard fling | three, stopping inside 2.5 s |
+| flick | one step in ~1.0 s |
+| firm swipe | two steps in ~1.3 s |
+| hard fling | three, stopped inside 1.7 s |
+
+Friction is exponential *plus a flat 2 px/frame*. Pure exponential decay never
+actually reaches zero, so the last stretch of a throw crawls along at a few
+pixels a frame and the whole thing feels like a perished elastic band. Taking
+a constant off as well makes the loss per frame near-constant — a definite
+stop rather than a fade — and cuts a throw from ~2.3 s to ~0.9 s without
+shortening the roll at all. The final snap is eased out, so it arrives
+decisively instead of drifting in at constant speed.
 
 A throw that has already stepped settles onto whichever screen it stopped
 nearest; one that has not needs only a third of the way, because a deliberate

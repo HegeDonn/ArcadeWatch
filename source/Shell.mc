@@ -43,7 +43,7 @@ module Shell {
     // this one. Sideways changes colour, up and down changes game.
     //
     // The simulation freezes for the duration so both halves show one instant.
-    const SETTLE_FRAMES = 6;
+    const SETTLE_FRAMES = 5;
     const TAKE_FRACTION = 4;          // drag a quarter of the way to commit
     const AXIS_SLOP = 8;              // px before we decide which way you meant
 
@@ -51,9 +51,17 @@ module Shell {
     // next game or colour each time a whole screen goes past, until friction
     // brings it down and it settles on whichever one it stopped nearest.
     const FLING_MIN = 6;              // px/frame worth carrying on with
-    const FLING_STOP = 3;             // below this, settle
-    const FRICTION_NUM = 29;          // velocity *= 29/32 each frame
+    const FLING_STOP = 5;             // below this, settle
+    const FRICTION_NUM = 30;          // velocity *= 30/32 ...
     const FRICTION_DEN = 32;
+    const FRICTION_FLAT = 2;          // ... and then loses 2 px/frame outright
+
+    // The flat term is what makes it brake rather than trail off. Pure
+    // exponential decay never actually reaches zero, so the last stretch
+    // crawls along at a few px a frame and the whole thing feels like a
+    // perished elastic band. Taking a constant off as well brings it to a
+    // definite stop, and cuts a throw from ~2.3 s to ~1.7 s without losing any
+    // of the roll: a hard fling still carries three screens.
 
     const CHANGE_COLOUR = 0;
     const CHANGE_GAME = 1;
@@ -144,6 +152,8 @@ module Shell {
         var sp = span();
         offset += velocity;
         velocity = (velocity * FRICTION_NUM) / FRICTION_DEN;
+        if (velocity > 0) { velocity -= FRICTION_FLAT; }
+        else if (velocity < 0) { velocity += FRICTION_FLAT; }
 
         while (offset <= -sp) { offset += sp; stepChange(1); flingSteps++; }
         while (offset >= sp) { offset -= sp; stepChange(-1); flingSteps++; }
@@ -182,9 +192,13 @@ module Shell {
     function tickSlide() as Void {
         if (settling <= 0) { return; }
         settling--;
+        // Eased out, not linear: it should arrive decisively and stop, the
+        // way a taut band snaps back, rather than drift in at constant speed.
         var t = SETTLE_FRAMES - settling;
         if (t > SETTLE_FRAMES) { t = SETTLE_FRAMES; }
-        offset = settleFrom + ((settleTo - settleFrom) * t) / SETTLE_FRAMES;
+        var inv = SETTLE_FRAMES - t;
+        var e = 100 - (inv * inv * 100) / (SETTLE_FRAMES * SETTLE_FRAMES);
+        offset = settleFrom + ((settleTo - settleFrom) * e) / 100;
         if (settling > 0) { return; }
         if (committing) { applyChange(); }
         offset = 0;
