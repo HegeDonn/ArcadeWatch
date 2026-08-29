@@ -29,7 +29,7 @@ module Shell {
     var infoTimer as Number = 0;
 
     function showInfo() as Void {
-        Sensors.reset();              // always a fresh reading on tap
+        Sensors.refresh(frame);       // read now, not next tick
         infoTimer = INFO_FRAMES;
     }
     function hideInfo() as Void { infoTimer = 0; }

@@ -173,7 +173,18 @@ A child swiping randomly trips neither.
 | | |
 |---|---|
 | Heart rate | `Activity.currentHeartRate` is null outside a recorded activity, so the live source is the newest sample of `ActivityMonitor.getHeartRateHistory`. |
-| Body Battery | `SensorHistory.getBodyBatteryHistory`. **Verify this one on the watch:** Body Battery is *not* listed in the vívoactive 5's `sensorHistory` device profile (which advertises only heartrate and pulseox), yet the call does answer in the simulator. It is made behind `has` guards and degrades to `--`. |
+| Body Battery | `SensorHistory.getBodyBatteryHistory`, newest sample first, scanning past empty slots rather than giving up on the first. Body Battery is *not* listed in the vívoactive 5's `sensorHistory` device profile (which advertises only heartrate and pulseox), yet the call answers in the simulator — so what a real watch does here is genuinely unknown, and the read-out says which way it failed rather than just shrugging. |
+
+When Body Battery cannot be read, the bust shows a numeric code instead of a
+value — the tiny font is digits and a minus only, so the codes are numeric too:
+
+| shown | meaning |
+|---|---|
+| `-1` | this device has no `SensorHistory` module at all |
+| `-2` | it has one, but no `getBodyBatteryHistory` |
+| `-4` | the iterator ran dry, or every sample was empty |
+| `-5` | the call threw |
+| `--` | not polled yet |
 
 Both are capped at three characters — which is what fits inside the icons,
 and why the Body Battery figure carries no `%`. They are only polled while
