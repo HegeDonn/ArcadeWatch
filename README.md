@@ -125,13 +125,19 @@ choice survives closing the app. **Tap** skips the clock dwell.
 | firm swipe | two steps in ~1.3 s |
 | hard fling | three, stopped inside 1.7 s |
 
-Friction is exponential *plus a flat 2 px/frame*. Pure exponential decay never
-actually reaches zero, so the last stretch of a throw crawls along at a few
-pixels a frame and the whole thing feels like a perished elastic band. Taking
-a constant off as well makes the loss per frame near-constant — a definite
-stop rather than a fade — and cuts a throw from ~2.3 s to ~0.9 s without
-shortening the roll at all. The final snap is eased out, so it arrives
-decisively instead of drifting in at constant speed.
+The destination is chosen **at the moment you let go**, from the release speed,
+and the screen then eases straight to it. Nothing coasts freely.
+
+That is what stops the yank. Coasting and snapping to whichever screen was
+nearest at the end meant a throw that almost made it was still travelling
+forward when it decided it had not, and got hauled backwards — a reversal you
+see. Fixing the target up front means the motion only ever goes one way. The
+only throws that return are ones that never covered a quarter of a screen,
+where the move back is too small to read as a reversal.
+
+How far a throw *would* have coasted is still simulated with the old friction
+model, so the feel of "harder throw goes further" is unchanged — it is used to
+pick the destination, never to drive the motion.
 
 A throw that has already stepped settles onto whichever screen it stopped
 nearest; one that has not needs only a third of the way, because a deliberate

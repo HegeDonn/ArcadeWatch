@@ -69,13 +69,12 @@ module Shell {
     var axis as Number = -1;          // -1 undecided, 0 horizontal, 1 vertical
     var offset as Number = 0;         // px the current screen has moved
     var dragging as Boolean = false;
-    var settling as Number = 0;
-    var settleFrom as Number = 0;
-    var settleTo as Number = 0;
-    var committing as Boolean = false;
     var velocity as Number = 0;
-    var flinging as Boolean = false;
-    var flingSteps as Number = 0;
+    var tweening as Boolean = false;
+    var tweenTotal as Number = 0;
+    var tweenDone as Number = 0;
+    var tweenFrames as Number = 0;
+    var tweenT as Number = 0;
 
     var _startX as Number = 0;
     var _startY as Number = 0;
@@ -90,13 +89,12 @@ module Shell {
     function delta() as Number { return (offset < 0) ? 1 : -1; }
 
     function sliding() as Boolean {
-        return dragging || flinging || settling > 0 || offset != 0;
+        return dragging || tweening || offset != 0;
     }
 
     function dragStart(x as Number, y as Number) as Void {
         dragging = true;
-        flinging = false;
-        settling = 0;
+        tweening = false;
         velocity = 0;
         axis = -1;
         offset = 0;
@@ -128,88 +126,99 @@ module Shell {
         if (!dragging) { return; }
         dragging = false;
         _lastDrag = System.getTimer();
-        if (axis < 0 || (offset == 0 && velocity.abs() < FLING_MIN)) {
-            offset = 0;
-            axis = -1;
-            return;
-        }
+        if (axis < 0) { offset = 0; axis = -1; return; }
+
         var lim = span() / 2;
         if (velocity > lim) { velocity = lim; }
         if (velocity < -lim) { velocity = -lim; }
-        if (velocity.abs() >= FLING_MIN) {
-            flinging = true;              // let it roll
-            flingSteps = 0;
+        launch();
+    }
+
+    // How far a free coast would carry, given the release speed. Used to
+    // decide the destination *before* moving, never to drive the motion.
+    function coastDistance(v as Number) as Number {
+        var d = 0;
+        var guard = 0;
+        while (v.abs() >= FLING_STOP && guard < 60) {
+            d += v;
+            v = (v * FRICTION_NUM) / FRICTION_DEN;
+            if (v > 0) { v -= FRICTION_FLAT; }
+            else if (v < 0) { v += FRICTION_FLAT; }
+            guard++;
+        }
+        return d;
+    }
+
+    // Pick the screen this throw is going to land on, then drive straight
+    // there.
+    //
+    // Coasting freely and snapping to whatever was nearest at the end meant a
+    // throw that almost made it was still moving forward when it decided it
+    // had not, and got yanked backwards. Choosing the destination up front and
+    // easing into it means the motion never reverses: the only throws that
+    // return are ones that never got a quarter of the way, where the move back
+    // is small enough not to read as a reversal at all.
+    function launch() as Void {
+        var sp = span();
+        var predicted = offset + coastDistance(velocity);
+        var steps = (predicted.abs() + (sp * 3) / 4) / sp;
+        var dir = (predicted < 0) ? -1 : 1;
+        if (predicted == 0) { dir = (offset < 0) ? -1 : 1; }
+
+        tweenTotal = dir * steps * sp - offset;
+        if (tweenTotal == 0) {
+            offset = 0;
+            axis = -1;
+            velocity = 0;
+            Theme.flush();
             return;
         }
-        settleFrom = offset;
-        committing = offset.abs() * TAKE_FRACTION >= span();
-        settleTo = committing ? ((offset < 0) ? -span() : span()) : 0;
-        settling = SETTLE_FRAMES;
+        tweenDone = 0;
+        tweenT = 0;
+        var n = tweenTotal.abs() / 24;
+        if (n < 5) { n = 5; }
+        if (n > 16) { n = 16; }
+        tweenFrames = n;
+        tweening = true;
     }
 
-    // Coast, stepping one game or colour per screen that goes past.
-    function tickFling() as Void {
-        var sp = span();
-        offset += velocity;
-        velocity = (velocity * FRICTION_NUM) / FRICTION_DEN;
-        if (velocity > 0) { velocity -= FRICTION_FLAT; }
-        else if (velocity < 0) { velocity += FRICTION_FLAT; }
-
-        while (offset <= -sp) { offset += sp; stepChange(1); flingSteps++; }
-        while (offset >= sp) { offset -= sp; stepChange(-1); flingSteps++; }
-
-        if (velocity.abs() >= FLING_STOP) { return; }
-        flinging = false;
-        settleFrom = offset;
-        // A throw that already stepped settles onto whichever screen it
-        // stopped nearest; one that has not yet stepped only needs a third of
-        // the way, because a deliberate flick should always get you somewhere.
-        committing = (flingSteps > 0)
-                   ? (offset.abs() * 2 >= sp)
-                   : (offset.abs() * 3 >= sp);
-        settleTo = committing ? ((offset < 0) ? -sp : sp) : 0;
-        settling = SETTLE_FRAMES;
-    }
-
+    // One game or colour per screen that goes past.
     function stepChange(d as Number) as Void {
         if (axis == 0) { Theme.cycleWall(d); }
         else { switchTo((game + d + COUNT) % COUNT); }
     }
 
-    // A swipe that arrives as a gesture or a behaviour, on a device or in a
-    // state where the drag events did not. Ignored if a drag just handled it.
-    function flick(ax as Number, dir as Number) as Void {
-        if (sliding() || System.getTimer() - _lastDrag < 400) { return; }
-        velocity = 0;
-        axis = ax;
-        settleFrom = 0;
-        offset = (dir > 0) ? -1 : 1;
-        committing = true;
-        settleTo = (dir > 0) ? -span() : span();
-        settling = SETTLE_FRAMES + 4;
-    }
+    // Eased out over the whole distance, so it leaves quickly and arrives
+    // gently, in one direction throughout.
+    function tickTween() as Void {
+        tweenT++;
+        var n = tweenFrames;
+        var inv = n - tweenT;
+        var done = (tweenTotal * (n * n - inv * inv)) / (n * n);
+        var moved = done - tweenDone;
+        tweenDone = done;
+        offset += moved;
 
-    function tickSlide() as Void {
-        if (settling <= 0) { return; }
-        settling--;
-        // Eased out, not linear: it should arrive decisively and stop, the
-        // way a taut band snaps back, rather than drift in at constant speed.
-        var t = SETTLE_FRAMES - settling;
-        if (t > SETTLE_FRAMES) { t = SETTLE_FRAMES; }
-        var inv = SETTLE_FRAMES - t;
-        var e = 100 - (inv * inv * 100) / (SETTLE_FRAMES * SETTLE_FRAMES);
-        offset = settleFrom + ((settleTo - settleFrom) * e) / 100;
-        if (settling > 0) { return; }
-        if (committing) { applyChange(); }
+        var sp = span();
+        while (offset <= -sp) { offset += sp; stepChange(1); }
+        while (offset >= sp) { offset -= sp; stepChange(-1); }
+
+        if (tweenT < n) { return; }
+        tweening = false;
         offset = 0;
         axis = -1;
-        committing = false;
         velocity = 0;
-        Theme.flush();            // one storage write per throw, not per step
+        Theme.flush();
     }
 
-    function applyChange() as Void {
-        stepChange((settleTo < 0) ? 1 : -1);
+    // A swipe that arrived as a gesture or a behaviour rather than as drag
+    // events. Ignored if a drag just handled the same movement.
+    function flick(ax as Number, dir as Number) as Void {
+        if (sliding() || System.getTimer() - _lastDrag < 400) { return; }
+        axis = ax;
+        offset = 0;
+        velocity = (dir > 0) ? -40 : 40;
+        launch();
     }
 
     // Games keep their state, so flicking between them resumes rather than
@@ -261,12 +270,8 @@ module Shell {
             Sensors.poll(frame);
         }
         if (dragging) { return; }              // frozen under your finger
-        if (flinging) {
-            tickFling();
-            return;
-        }
-        if (settling > 0) {
-            tickSlide();
+        if (tweening) {
+            tickTween();
             return;
         }
         if (game == PACMAN) { PacGame.update(); }
