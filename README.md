@@ -414,6 +414,18 @@ Things that cost real time — don't rediscover them.
 - **Don't write to `Application.Storage` mid-animation.** A flick rolls
   through several colours, and saving on each one is a storage write per frame;
   the choice is marked dirty and flushed once the throw stops.
+- **A cache has to remember what it was built from.** The maze buffer is
+  painted in the wall colour, and nothing marked it stale when the colour
+  changed — so a recolour previewed correctly under the finger and then
+  snapped back to the old colour once it committed. The buffer now records
+  which colour it holds and repaints when that stops matching. The field that
+  would have caught this had been deleted earlier as "unused".
+- **Don't repaint a cache mid-animation.** Flinging *into* Pac-Man tested
+  whether the incoming game was the same game, which is never true during a
+  game change, so it repainted the whole maze — 544 calls against a ~700-call
+  budget — in the middle of the throw. That is the frame that stutters, and
+  why a fast swipe seemed to struggle to show the third and fourth games. A
+  game change does not change the colour, so the cache was already correct.
 - **Sideloaded apps never show `settings.xml`** in Garmin Connect Mobile.
 - **No `getVectorFont` / `drawAngledText`** on the vívoactive 5.
 

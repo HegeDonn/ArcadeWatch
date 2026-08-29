@@ -14,6 +14,10 @@ class ArcadeView extends WatchUi.View {
     // be allocated the recolour still works, it just snaps instead of sliding.
     private var _bufNext as Graphics.BufferedBitmap? = null;
     private var _flashOn as Boolean = false;
+    // What colour each cached maze was actually painted in. Without this the
+    // maze kept the old colour after a recolour committed: nothing marks it
+    // stale, so the swipe previewed the new colour and then snapped back.
+    private var _bufColour as Number = -1;
     private var _bufNextColour as Number = -1;
     private var _started as Boolean = false;
 
@@ -171,6 +175,7 @@ class ArcadeView extends WatchUi.View {
         var b = _buf;
         if (b == null) { return; }
         paintMaze(b.getDc(), wallColor, true);
+        _bufColour = wallColor;
     }
 
     // One bite = one small black rectangle punched out of the buffer, rather
@@ -452,7 +457,7 @@ class ArcadeView extends WatchUi.View {
                     PacGame.mazeDirty = false;
                     rebuild(on ? Theme.WALL_FLASH : Theme.wall());
                 }
-            } else if (PacGame.mazeDirty) {
+            } else if (PacGame.mazeDirty || _bufColour != Theme.wall()) {
                 PacGame.mazeDirty = false;
                 _flashOn = false;
                 rebuild(Theme.wall());
@@ -488,10 +493,18 @@ class ArcadeView extends WatchUi.View {
         drawScene(dc, _buf, ox, oy, g, flashing, Theme.wall());
 
         // Pac-Man's maze is cached, so the incoming half needs its own copy
-        // whenever the colour it should be drawn in differs from the cache.
+        // only when the colour differs from what the cache holds.
+        //
+        // This used to test whether the incoming game was the *same* game,
+        // which is never true during a game change -- so flinging into
+        // Pac-Man repainted the whole maze, 544 draw calls, in the middle of
+        // the throw. Against a ~700-call budget that is the frame that
+        // stutters, which is why a fast swipe seemed to struggle to show the
+        // third and fourth games. A game change does not change the colour,
+        // so the cache is already right.
         var inBuf = null;
         if (inG == Shell.PACMAN) {
-            if (inG == g && inCol == Theme.wall()) {
+            if (inCol == _bufColour) {
                 inBuf = _buf;
             } else if (_bufNext != null) {
                 if (_bufNextColour != inCol) {
